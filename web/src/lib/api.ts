@@ -20,7 +20,7 @@ const PASSWORD_KEY = 'tradebot.adminPassword';
 
 /**
  * Adresse du serveur. Vide en local (le serveur de développement relaie /api),
- * et l'URL des fonctions Supabase une fois en ligne (voir web/.env.production).
+ * et l'URL des fonctions Supabase une fois en ligne (voir web/.env.vercel).
  */
 const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
@@ -54,9 +54,12 @@ function setPassword(pw: string | null) {
 let sessionPassword: string | null = null;
 
 async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // Les lectures (GET) partent sans en-tête particulier : le navigateur n'a alors pas besoin
+  // d'une requête de vérification CORS préalable, ce qui divise par deux les appels à l'API en ligne.
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
   const pw = sessionPassword ?? getPassword();
-  if (pw) headers['x-admin-password'] = pw;
+  if (pw && method !== 'GET') headers['x-admin-password'] = pw;
   const res = await fetch(`${API_BASE}/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
