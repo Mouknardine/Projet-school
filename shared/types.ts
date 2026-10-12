@@ -7,6 +7,62 @@ export type BotStatus = 'running' | 'paused';
 export type StrategyId = 'sma_cross' | 'rsi' | 'macd' | 'bollinger' | 'score' | 'buy_hold';
 export type TradeTrigger = 'signal' | 'stop_loss' | 'take_profit' | 'manual';
 export type LogLevel = 'info' | 'signal' | 'trade' | 'warn' | 'error';
+/** Banque ou courtier dont le bot applique les vrais tarifs (« simple » = un pourcentage fixe choisi à la main). */
+export type BrokerId = 'swissquote' | 'postfinance' | 'yuh' | 'ibkr' | 'simple';
+/** Devises proposées pour le compte du bot. */
+export const ACCOUNT_CURRENCIES = ['CHF', 'EUR', 'USD'] as const;
+export type AccountCurrency = (typeof ACCOUNT_CURRENCIES)[number];
+
+/** Une ligne de coût d'un ordre (courtage, change, droit de timbre…), dans la devise du compte. */
+export interface CostLine {
+  kind: 'commission' | 'fx' | 'stamp' | 'ftt' | 'us_fees' | 'simple';
+  label: string;
+  amount: number;
+  /** Explication du calcul (taux, barème…). */
+  detail: string;
+}
+
+/** Tarifs d'un courtier, résumés pour l'affichage. */
+export interface BrokerInfo {
+  id: BrokerId;
+  name: string;
+  kind: string;
+  description: string;
+  /** Résumé lisible des frais (une ligne par élément). */
+  fees: string[];
+  fractional: boolean;
+  /** Le courtier est-il suisse ? (droit de timbre fédéral) */
+  swiss: boolean;
+  source: string;
+}
+
+/** Aperçu des frais réels d'un achat puis d'une revente, pour une action donnée. */
+export interface CostPreviewItem {
+  symbol: string;
+  name: string;
+  /** Devise de cotation de l'action. */
+  currency: string;
+  price: number;
+  /** 1 unité de la devise de l'action = fxRate unités de la devise du compte. */
+  fxRate: number;
+  qty: number;
+  /** Valeur des actions achetées, dans la devise du compte. */
+  value: number;
+  buy: CostLine[];
+  buyTotal: number;
+  sell: CostLine[];
+  sellTotal: number;
+  /** Hausse du cours nécessaire pour couvrir les frais d'achat et de revente (en %). */
+  breakEvenPct: number;
+}
+
+export interface CostPreview {
+  currency: string;
+  /** Montant investi par achat (capital × part investie). */
+  amount: number;
+  items: CostPreviewItem[];
+  errors: string[];
+}
 
 /** Une bougie (chandelier) : prix d'ouverture, plus haut, plus bas, clôture et volume sur une période. */
 export interface Bar {
@@ -65,9 +121,13 @@ export interface BotConfig {
   stopLossPct: number;
   /** Vente automatique si la position gagne X % (0 = désactivé). */
   takeProfitPct: number;
-  /** Frais de courtage par ordre, en % du montant. */
+  /** Frais de courtage par ordre, en % du montant (uniquement pour le courtier « simple »). */
   feePct: number;
   allowFractional: boolean;
+  /** Devise du compte : le capital et les résultats sont exprimés dans cette devise. */
+  currency: AccountCurrency | string;
+  /** Courtier dont le bot applique les tarifs réels. */
+  broker: BrokerId;
 }
 
 export interface Bot extends BotConfig {
@@ -76,6 +136,8 @@ export interface Bot extends BotConfig {
   currency: string;
   cash: number;
   startPrices: Record<string, number>;
+  /** Taux de change de chaque action vers la devise du compte au démarrage (1 si même devise). */
+  startFx: Record<string, number>;
   createdAt: number;
   lastTickAt: number | null;
   lastError: string | null;
@@ -84,13 +146,20 @@ export interface Bot extends BotConfig {
 export interface Position {
   symbol: string;
   qty: number;
-  /** Prix moyen d'achat (hors frais). */
+  /** Devise de cotation de l'action (USD, CHF, EUR…). */
+  currency: string;
+  /** Prix moyen d'achat (hors frais), dans la devise de l'action. */
   entryPrice: number;
-  /** Montant total payé, frais inclus. */
+  /** Taux de change au moment de l'achat (devise de l'action → devise du compte). */
+  entryFx: number;
+  /** Dernier taux de change connu. */
+  lastFx: number;
+  /** Montant total payé, frais inclus, dans la devise du compte. */
   costBasis: number;
   openedAt: number;
   lastPrice: number | null;
   lastPriceAt: number | null;
+  /** Valeur actuelle dans la devise du compte. */
   marketValue: number;
   unrealizedPnl: number;
   unrealizedPnlPct: number;
@@ -105,9 +174,17 @@ export interface Trade {
   symbol: string;
   side: Side;
   qty: number;
+  /** Prix d'une action, dans sa devise de cotation. */
   price: number;
+  /** Devise de cotation de l'action. */
+  currency: string;
+  /** Taux de change utilisé (1 unité de la devise de l'action = fxRate unités de la devise du compte). */
+  fxRate: number;
+  /** Total des frais, dans la devise du compte. */
   fees: number;
-  /** Montant net : débité du cash pour un achat, crédité pour une vente. */
+  /** Détail des frais (absent pour les anciens trades). */
+  costs: CostLine[] | null;
+  /** Montant net dans la devise du compte : débité pour un achat, crédité pour une vente. */
   amount: number;
   /** Résultat réalisé (uniquement pour les ventes). */
   pnl: number | null;
@@ -167,6 +244,10 @@ export interface Session {
 export interface WatchItem {
   symbol: string;
   name: string | null;
+  /** Devise de cotation de l'action. */
+  currency: string | null;
+  /** Taux de change actuel vers la devise du compte. */
+  fx: number | null;
   price: number | null;
   marketOpen: boolean | null;
   /** Variation du cours depuis le lancement du bot (en %). */
@@ -258,5 +339,7 @@ export interface BacktestResult {
 export interface AppConfig {
   authRequired: boolean;
   tickSeconds: number;
+  brokers: BrokerInfo[];
+  accountCurrencies: string[];
   intervals: { id: Interval; label: string; backtestRanges: { id: string; label: string }[] }[];
 }

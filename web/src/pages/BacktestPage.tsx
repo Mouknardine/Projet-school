@@ -56,6 +56,8 @@ export function BacktestPage() {
           onChange={setValue}
           strategies={strategies}
           intervals={config.intervals}
+          brokers={config.brokers ?? []}
+          currencies={config.accountCurrencies ?? ['CHF', 'EUR', 'USD']}
           intervalExtra={
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium text-ink-2">Période testée :</span>
@@ -169,7 +171,7 @@ function Results({ result, config, strategy, onLaunch }: { result: BacktestResul
           label="Frais payés"
           value={fmtMoney(stats.feesPaid, currency)}
           sub={`${result.trades.length} achats et ventes`}
-          help="Chaque ordre coûte des frais de courtage. Une stratégie qui fait beaucoup de trades en paie beaucoup."
+          help="Courtage, frais de change, droit de timbre et taxes, selon la banque choisie, au taux de change de chaque jour. Une stratégie qui fait beaucoup de trades en paie beaucoup."
         />
         <Kpi
           label="Temps investi"

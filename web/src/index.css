@@ -110,6 +110,11 @@ input[type='number']::-webkit-inner-spin-button {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Espace sous la barre d'état de l'iPhone quand l'app est ajoutée à l'écran d'accueil. */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
   .animate-sheet,

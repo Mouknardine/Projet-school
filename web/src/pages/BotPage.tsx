@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import type { Bot, BotDetail, BotSummary, LogEntry, LogLevel, Position, StrategyInfo, WatchItem } from '../../../shared/types.ts';
+import type { Bot, BotDetail, BotSummary, BrokerInfo, LogEntry, LogLevel, Position, StrategyInfo, WatchItem } from '../../../shared/types.ts';
 import { useAppData } from '../App.tsx';
 import { AllocationBar, COLORS, PerformanceChart, PriceChart, RiskTrack, SERIES, Sparkline } from '../components/charts.tsx';
 import { TradesTable } from '../components/TradesTable.tsx';
@@ -148,7 +148,7 @@ export function BotPage() {
       </div>
 
       {/* Stratégie */}
-      <StrategyCard bot={bot} strategy={strategy} tickSeconds={config.tickSeconds} />
+      <StrategyCard bot={bot} strategy={strategy} tickSeconds={config.tickSeconds} broker={config.brokers?.find((b) => b.id === bot.broker)} />
 
       {/* Portefeuille */}
       <Card
@@ -256,7 +256,7 @@ export function BotPage() {
       </section>
 
       {/* Statistiques */}
-      <Stats bot={bot} summary={summary} />
+      <Stats bot={bot} summary={summary} brokerName={config.brokers?.find((b) => b.id === bot.broker)?.name} />
 
       {/* Journal */}
       <Journal logs={logs.data} />
@@ -416,7 +416,7 @@ function Summary({ bot, summary, positions, marketOpen, className }: {
 // Stratégie expliquée
 // ---------------------------------------------------------------------------
 
-function StrategyCard({ bot, strategy, tickSeconds }: { bot: Bot; strategy: StrategyInfo; tickSeconds: number }) {
+function StrategyCard({ bot, strategy, tickSeconds, broker }: { bot: Bot; strategy: StrategyInfo; tickSeconds: number; broker?: BrokerInfo }) {
   return (
     <Card id="strategie" title="Comment ce bot décide" subtitle={`Stratégie : ${strategy.name}`}>
       <p className="max-w-4xl text-sm leading-relaxed text-ink-2">{strategy.description}</p>
@@ -450,7 +450,15 @@ function StrategyCard({ bot, strategy, tickSeconds }: { bot: Bot; strategy: Stra
               ? `Il revend automatiquement une action qui gagne ${bot.takeProfitPct} % (« objectif » ou take-profit), pour encaisser le gain.`
               : "Pas de vente automatique en cas de gain (objectif désactivé)."}
           </li>
-          <li>Chaque achat ou vente coûte {bot.feePct} % de frais, comme chez une vraie banque.</li>
+          {bot.broker === 'simple' || !broker ? (
+            <li>Chaque achat ou vente coûte {bot.feePct} % de frais (frais simplifiés).</li>
+          ) : (
+            <li>
+              Son compte est en {bot.currency}, avec les vrais tarifs de {broker.name} : courtage, frais de change pour les actions cotées dans une autre
+              monnaie{broker.swiss ? ', droit de timbre suisse' : ''} et taxes étrangères (France, Royaume-Uni, États-Unis). Le détail est affiché sur chaque
+              trade.
+            </li>
+          )}
           <li>
             Il vérifie les cours toutes les {tickSeconds} secondes et prend ses décisions avec des prix résumés par tranches de {INTERVAL_LABEL[bot.interval]} («
             bougies »).
@@ -490,9 +498,17 @@ function PositionCard({ position: p, name, color, currency, now, disabled, onSel
         </div>
       </div>
       <p className="num mt-3 text-sm leading-relaxed text-ink-2">
-        Le bot en a acheté {fmtQty(p.qty)} à {fmtPrice(p.entryPrice)} ; le cours est maintenant à {fmtPrice(p.lastPrice)}. Valeur :{' '}
-        <b className="font-semibold text-ink">{fmtMoney(p.marketValue, currency)}</b>.
+        Le bot en a acheté {fmtQty(p.qty)} à {fmtPrice(p.entryPrice)}&nbsp;{p.currency}&nbsp;; le cours est maintenant à {fmtPrice(p.lastPrice)}&nbsp;{p.currency}. Valeur&nbsp;:{' '}
+        <b className="font-semibold text-ink">{fmtMoney(p.marketValue, currency)}</b>
+        {p.currency !== currency && (
+          <span className="text-ink-3">
+            {' '}
+            (1&nbsp;{p.currency}&nbsp;=&nbsp;{fmtNum(p.lastFx, 4)}&nbsp;{currency}, contre {fmtNum(p.entryFx, 4)} à l'achat)
+          </span>
+        )}
+        .
       </p>
+      <PnlBreakdown position={p} currency={currency} />
       <div className="mt-3">
         <div className="mb-1.5 text-xs text-ink-3">Où en est le cours par rapport aux ventes automatiques :</div>
         <RiskTrack stop={p.stopLossPrice} target={p.takeProfitPrice} entry={p.entryPrice} price={p.lastPrice ?? p.entryPrice} className="w-full" />
@@ -502,6 +518,31 @@ function PositionCard({ position: p, name, color, currency, now, disabled, onSel
         <Button className="h-8 px-2.5 text-xs" disabled={disabled} onClick={onSell}>
           Vendre maintenant
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/** D'où vient le gain ou la perte d'une position : le cours, la monnaie et les frais d'achat. */
+function PnlBreakdown({ position: p, currency }: { position: Position; currency: string }) {
+  const price = p.lastPrice ?? p.entryPrice;
+  const priceEffect = (price / p.entryPrice - 1) * 100;
+  const fxEffect = (p.lastFx / p.entryFx - 1) * 100;
+  const buyFees = p.costBasis - p.qty * p.entryPrice * p.entryFx;
+  const foreign = p.currency !== currency;
+  return (
+    <div className="num mt-2 grid grid-cols-3 gap-1.5 text-center text-xs">
+      <div className="rounded-lg bg-page/60 px-2 py-1.5">
+        <div className="text-ink-3">Cours</div>
+        <div className={cx('font-semibold', pnlClass(priceEffect))}>{fmtPct(priceEffect)}</div>
+      </div>
+      <div className="rounded-lg bg-page/60 px-2 py-1.5">
+        <div className="text-ink-3">{foreign ? `${p.currency} en ${currency}` : 'Change'}</div>
+        <div className={cx('font-semibold', foreign ? pnlClass(fxEffect) : 'text-ink-3')}>{foreign ? fmtPct(fxEffect) : 'aucun'}</div>
+      </div>
+      <div className="rounded-lg bg-page/60 px-2 py-1.5">
+        <div className="text-ink-3">Frais d'achat</div>
+        <div className={cx('font-semibold', buyFees > 0.005 ? 'text-down' : 'text-ink-3')}>{buyFees > 0.005 ? `−${fmtMoney(buyFees, currency)}` : '0'}</div>
       </div>
     </div>
   );
@@ -520,7 +561,7 @@ function ManageAction({ button, children }: { button: ReactNode; children: React
 // Statistiques, chacune avec son explication
 // ---------------------------------------------------------------------------
 
-function Stats({ bot, summary }: { bot: Bot; summary: BotSummary }) {
+function Stats({ bot, summary, brokerName }: { bot: Bot; summary: BotSummary; brokerName?: string }) {
   const cur = bot.currency;
   const vs = summary.benchmarkPnlPct !== null ? summary.pnlPct - summary.benchmarkPnlPct : null;
   const wins = summary.winRate !== null ? Math.round((summary.winRate / 100) * summary.closedTrades) : 0;
@@ -574,8 +615,8 @@ function Stats({ bot, summary }: { bot: Bot; summary: BotSummary }) {
           label="Frais payés"
           icon={<Receipt aria-hidden />}
           value={fmtMoney(summary.feesPaid, cur)}
-          sub={`${bot.feePct} % par ordre`}
-          help="Chaque achat et chaque vente coûte des frais de courtage, comme chez une vraie banque. Un bot qui fait beaucoup de trades paie beaucoup de frais, ce qui réduit ses gains."
+          sub={bot.broker === 'simple' || !brokerName ? `${bot.feePct} % par ordre` : `tarifs ${brokerName}`}
+          help="Tout ce que la banque et l'État prélèvent : courtage, frais de change, droit de timbre suisse, taxes étrangères. Un bot qui fait beaucoup de trades paie beaucoup de frais, ce qui réduit ses gains. Touchez un trade pour voir le détail."
         />
       </div>
     </section>
@@ -620,7 +661,9 @@ function WatchCard({ item, color, held, active, now, onSelect }: {
         </div>
       </div>
       <div className="mt-3 flex items-end justify-between gap-3">
-        <div className="text-lg font-semibold tracking-tight text-ink">{fmtPrice(item.price)}</div>
+        <div className="text-lg font-semibold tracking-tight text-ink">
+          {fmtPrice(item.price)} <span className="text-xs font-normal text-ink-3">{item.currency}</span>
+        </div>
         <Sparkline values={item.spark} base={item.spark[0]} className="h-9 w-28" />
       </div>
       <div className="mt-3 rounded-lg bg-page/60 px-3 py-2.5 text-xs leading-relaxed">

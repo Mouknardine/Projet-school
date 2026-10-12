@@ -3,13 +3,14 @@
 import type { ReactNode } from 'react';
 import { useAppData } from '../App.tsx';
 import { Card } from '../components/ui.tsx';
+import { nbsp } from '../lib/format.ts';
 
 const STEPS: { title: string; text: string }[] = [
   { title: '1. Il lit les cours', text: 'Le bot télécharge les vrais cours de la bourse depuis Yahoo Finance, résumés en « bougies » (prix d’ouverture, plus haut, plus bas, clôture).' },
   { title: '2. Il calcule', text: 'Il calcule des indicateurs mathématiques à partir de ces prix : moyennes, RSI, MACD, écart-type…' },
   { title: '3. Il décide', text: 'Sa stratégie compare ces indicateurs à des règles précises et donne un signal : ACHETER, VENDRE ou ATTENDRE.' },
   { title: '4. Il vérifie', text: 'Il applique ses règles de prudence : part maximale par achat, liquidités disponibles, stop-loss et objectif.' },
-  { title: '5. Il passe l’ordre', text: "L'achat ou la vente est simulé au cours actuel, frais compris. Aucun argent réel n'est engagé." },
+  { title: '5. Il passe l’ordre', text: "L'achat ou la vente est simulé au cours actuel, avec les vrais frais de la banque choisie (courtage, change, taxes). Aucun argent réel n'est engagé." },
   { title: '6. Il explique', text: 'Chaque trade est enregistré avec sa raison, et le résultat est comparé à « acheter et garder ».' },
 ];
 
@@ -20,6 +21,9 @@ const GLOSSARY: { term: string; text: string }[] = [
   { term: 'Bougie', text: 'Le résumé des prix sur une durée (5 min, 1 h, 1 jour…) : prix au début, à la fin, le plus haut et le plus bas.' },
   { term: 'Trade (ordre)', text: 'Un achat ou une vente passé par le bot.' },
   { term: 'Liquidités', text: "L'argent du bot qui n'est pas investi en actions." },
+  { term: 'Courtage', text: 'Ce que la banque facture pour exécuter un achat ou une vente.' },
+  { term: 'Taux de change', text: 'Le prix d’une monnaie dans une autre : par exemple, combien de francs vaut 1 dollar.' },
+  { term: 'Droit de timbre', text: 'Un impôt suisse prélevé sur chaque achat et chaque vente de titres passés par une banque suisse.' },
   { term: 'Stop-loss', text: 'Vente automatique quand une action a trop baissé, pour limiter la perte.' },
   { term: 'Objectif (take-profit)', text: 'Vente automatique quand une action a assez monté, pour encaisser le gain.' },
   { term: 'Acheter et garder (Buy & Hold)', text: 'Acheter les actions au départ et ne plus y toucher. Sert de point de comparaison pour les bots.' },
@@ -139,8 +143,80 @@ export function LearnPage() {
           <Term name="Part investie par achat (taille de position)">Part du portefeuille investie à chaque achat (ex. 20 %). Elle évite de tout miser sur une seule action.</Term>
           <Term name="Stop-loss">Vente automatique si le cours baisse d'un certain pourcentage sous le prix d'achat : on limite la perte.</Term>
           <Term name="Objectif (take-profit)">Vente automatique quand le gain atteint l'objectif fixé : on sécurise le bénéfice.</Term>
-          <Term name="Frais de courtage">Chaque ordre coûte un pourcentage du montant. Un bot qui trade beaucoup paie beaucoup de frais.</Term>
+          <Term name="Les frais">Chaque ordre coûte de l'argent (voir ci-dessous). Un bot qui trade beaucoup paie beaucoup de frais.</Term>
         </div>
+      </Section>
+
+      <Section title="Ce que coûte vraiment un achat ou une vente">
+        <p>
+          Comme dans la réalité, un ordre de bourse coûte plus que le prix des actions. Le bot paie les frais de la banque choisie à sa création, calculés
+          ordre par ordre :
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Term name="1. Le courtage (la banque)">
+            Ce que la banque facture pour passer l'ordre : un montant fixe par palier (Swissquote, PostFinance), un pourcentage (Yuh) ou quelques centimes
+            par action (Interactive Brokers).
+          </Term>
+          <Term name="2. Le change (la conversion de monnaie)">
+            Pour acheter une action américaine avec des francs, la banque convertit les francs en dollars au taux du moment, et prend une marge (0,95 % chez
+            Yuh et Swissquote). Le bot utilise le vrai taux de change de Yahoo Finance, et la valeur de ses actions bouge aussi quand le dollar ou l'euro
+            monte ou baisse.
+          </Term>
+          <Term name="3. Le droit de timbre suisse (l'impôt fédéral)">
+            0,075 % pour une action suisse, 0,15 % pour une action étrangère, à l'achat comme à la vente. Il est prélevé par les banques suisses, pas par
+            les courtiers étrangers comme Interactive Brokers. Les cryptomonnaies n'y sont pas soumises.
+          </Term>
+          <Term name="4. Les taxes étrangères">
+            France : 0,4 % sur l'achat d'actions de grandes sociétés françaises (taxe sur les transactions financières). Royaume-Uni : 0,5 % sur les achats.
+            États-Unis : une petite taxe de la SEC sur les ventes (20,60 dollars par million).
+          </Term>
+        </div>
+        <div className="rounded-lg border border-line bg-page/60 p-3">
+          <div className="font-semibold text-ink">Exemple : acheter pour 2 000 CHF d'actions Apple chez Yuh</div>
+          <ul className="num mt-2 space-y-1 text-ink-3">
+            {[
+              ['Courtage : 0,5 %', '10.00 CHF'],
+              ['Change CHF → USD : 0,95 %', '19.00 CHF'],
+              ['Droit de timbre (action étrangère) : 0,15 %', '3.00 CHF'],
+            ].map(([label, amount]) => (
+              <li key={label} className="flex justify-between gap-3">
+                <span>{nbsp(label)}</span>
+                <span className="shrink-0">{nbsp(amount)}</span>
+              </li>
+            ))}
+            <li className="flex justify-between gap-3 border-t border-line pt-1 font-semibold text-ink">
+              <span>Frais à l'achat</span>
+              <span className="shrink-0">{nbsp('32.00 CHF (1,6 %)')}</span>
+            </li>
+          </ul>
+          <p className="mt-2 text-ink-3">
+            À la revente, à peu près autant. L'action doit donc monter d'environ 3 % avant que le bot gagne quoi que ce soit. C'est pour ça qu'un bot qui
+            achète et vend très souvent a du mal à battre « acheter et garder ».
+          </p>
+        </div>
+        {config.brokers?.length > 0 && (
+          <div className="grid gap-3 md:grid-cols-2">
+            {config.brokers
+              .filter((b) => b.id !== 'simple')
+              .map((b) => (
+                <div key={b.id} className="rounded-lg border border-line bg-page/60 p-3">
+                  <div className="font-semibold text-ink">{b.name}</div>
+                  <div className="text-xs text-ink-3">{b.kind}</div>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-ink-3">
+                    {b.fees.map((f) => (
+                      <li key={f}>{nbsp(f)}</li>
+                    ))}
+                  </ul>
+                  {b.source && (
+                    <a href={b.source} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-accent-text hover:underline">
+                      Source : tarifs officiels
+                    </a>
+                  )}
+                </div>
+              ))}
+          </div>
+        )}
+        <p className="text-xs text-ink-3">Tarifs relevés sur les sites officiels des banques et des administrations fiscales le 12 octobre 2026.</p>
       </Section>
 
       <Section title="Mesurer la performance">
@@ -165,6 +241,15 @@ export function LearnPage() {
             (« slippage »).
           </li>
           <li>Les cours de Yahoo Finance peuvent être différés d'environ 15 minutes selon la bourse.</li>
+          <li>
+            Le bot achète au dernier cours, sans l'écart entre prix d'achat et prix de vente (« spread ») que les bourses appliquent, en général quelques
+            centimes par action.
+          </li>
+          <li>
+            Frais simplifiés sur quelques points : la taxe française est appliquée à toutes les actions de Paris (sauf quelques sociétés étrangères comme
+            Airbus ou Stellantis), alors qu'elle ne vise que les sociétés françaises de plus d'un milliard d'euros ; le taux de change de PostFinance est une
+            estimation ; les droits de garde annuels ne sont pas comptés.
+          </li>
           <li>
             Les dividendes ne sont pas comptabilisés, et le backtest ne tient pas compte des actions qui ont disparu de la bourse (biais du survivant).
           </li>

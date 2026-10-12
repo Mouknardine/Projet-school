@@ -39,7 +39,7 @@ export function NewBotPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Créer un bot</h1>
         <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
-          Répondez aux 5 questions ci-dessous. Le bot démarre tout de suite : il suit les vrais cours et achète ou vend avec de l'argent fictif, pendant les heures
+          Répondez aux 6 questions ci-dessous. Le bot démarre tout de suite : il suit les vrais cours et achète ou vend avec de l'argent fictif, pendant les heures
           d'ouverture de la bourse.
         </p>
         <p className="mt-1.5 text-sm text-ink-3">Pas sûr de votre stratégie ? Testez-la d'abord sur le passé avec l'onglet « Tester ».</p>
@@ -51,7 +51,14 @@ export function NewBotPage() {
         </Field>
       </Card>
 
-      <ConfigForm value={value} onChange={setValue} strategies={strategies} intervals={config.intervals} />
+      <ConfigForm
+        value={value}
+        onChange={setValue}
+        strategies={strategies}
+        intervals={config.intervals}
+        brokers={config.brokers ?? []}
+        currencies={config.accountCurrencies ?? ['CHF', 'EUR', 'USD']}
+      />
 
       {error && <ErrorBox>{error}</ErrorBox>}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">

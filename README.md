@@ -8,9 +8,17 @@ Projet réalisé dans le cadre du TIP « Le trading algorithmique et l'intellige
 
 ## Fonctionnalités
 
-- **Création de bots** : capital de départ, actions suivies (recherche par nom ou listes prêtes : Tech US, SMI, Europe, crypto…),
-  stratégie et ses paramètres, unité de temps des bougies (5 min → 1 jour), gestion du risque (taille de position, stop-loss,
-  take-profit, frais de courtage, fractions d'actions).
+- **Création de bots** : capital de départ et devise du compte (CHF, EUR ou USD), banque dont le bot paie les tarifs, actions suivies
+  (recherche par nom ou listes prêtes : Tech US, SMI, Europe, crypto… ; on peut mélanger les bourses), stratégie et ses paramètres,
+  unité de temps des bougies (5 min → 1 jour), gestion du risque (taille de position, stop-loss, take-profit, fractions d'actions).
+- **Frais réels** : chaque ordre paie ce qu'il coûterait vraiment à un investisseur suisse, ligne par ligne :
+  - le courtage selon le barème de la banque choisie (Yuh, Swissquote, PostFinance ou Interactive Brokers) ;
+  - le change au vrai taux du moment (Yahoo Finance), avec la marge de la banque ;
+  - le droit de timbre fédéral (0,075 % / 0,15 %, seulement chez une banque suisse) ;
+  - les taxes étrangères : taxe française de 0,4 %, droit de timbre britannique de 0,5 %, frais SEC/FINRA américains.
+
+  Un mode « frais simplifiés » (un pourcentage fixe) reste disponible. Tarifs relevés le 12.10.2026 (sources dans
+  `server/trading/costs.ts`).
 - **Bot en direct** : toutes les 60 secondes, il récupère les cours réels (Yahoo Finance), calcule ses indicateurs et passe des ordres
   simulés pendant les heures d'ouverture de la bourse.
 - **Dashboard** : valeur du portefeuille, performance, comparaison avec le *Buy & Hold*, liquidités, drawdown maximal, positions ouvertes
@@ -65,8 +73,9 @@ flowchart LR
 2. **Stop-loss / take-profit** : si une position est ouverte et que le cours a franchi un seuil, elle est vendue immédiatement.
 3. **Signal** : uniquement quand une nouvelle bougie vient de se **clôturer** (une bougie en cours peut encore changer), la stratégie
    calcule ses indicateurs et renvoie ACHAT, VENTE ou ATTENTE, avec une explication.
-4. **Exécution** : l'ordre est simulé au cours actuel. Un achat investit *x %* de la valeur du portefeuille (sans dépasser le cash),
-   frais compris. Une vente solde toute la position et calcule le gain/perte réalisé, frais d'achat et de vente inclus.
+4. **Exécution** : l'ordre est simulé au cours actuel, converti dans la devise du compte au taux de change du moment. Un achat investit
+   *x %* de la valeur du portefeuille (sans dépasser le cash), tous frais compris (courtage, change, droit de timbre, taxes). Une vente
+   solde toute la position et calcule le gain/perte réalisé, frais d'achat et de vente inclus.
 5. **Suivi** : la valeur du portefeuille est enregistrée et comparée au **Buy & Hold** (les mêmes actions achetées à parts égales au
    lancement du bot).
 
@@ -103,9 +112,11 @@ server/                      Serveur (TypeScript), fonctionne sous Node.js et so
   db-postgres.ts             base Postgres (en ligne, ex. Supabase)
   config.ts                  configuration (variables d'environnement)
   market/yahoo.ts            récupération des cours (Yahoo Finance) + cache
+  market/fx.ts               taux de change (Yahoo Finance)
   trading/indicators.ts      SMA, EMA, RSI, MACD, Bollinger
   trading/strategies.ts      les 6 stratégies et leurs explications
-  trading/portfolio.ts       taille des ordres, frais, résultat d'une vente
+  trading/costs.ts           frais réels d'un ordre : courtage des banques, change, droit de timbre, taxes étrangères
+  trading/portfolio.ts       taille des ordres, résultat d'une vente
   trading/engine.ts          le bot en direct
   trading/backtest.ts        le backtest
   trading/stats.ts           drawdown, volatilité, Sharpe, taux de réussite
@@ -137,6 +148,7 @@ En ligne, elles sont dans la base Postgres de Supabase.
 | GET | `/api/bots/:id/chart?symbol=` | bougies + indicateurs + trades d'une action |
 | POST | `/api/backtest` | lancer un backtest |
 | GET | `/api/market/search?q=` | rechercher une action |
+| GET | `/api/costs/preview?broker=&currency=&amount=&symbols=` | frais réels d'un achat puis d'une revente, aux cours actuels |
 | POST | `/api/cron/tick` | analyse de tous les bots (appelée chaque minute par le planificateur en ligne) |
 
 ## Configuration (serveur local)

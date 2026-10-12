@@ -5,22 +5,30 @@ import crypto from 'node:crypto';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import { z } from 'zod';
-import type {
-  AppConfig,
-  BacktestResult,
-  BotConfig,
-  BotDetail,
-  BotListItem,
-  ChartResponse,
-  Interval,
-  LogLevel,
-  Quote,
-  StrategyId,
+import {
+  ACCOUNT_CURRENCIES,
+  type AppConfig,
+  type BacktestResult,
+  type Bar,
+  type BotConfig,
+  type BrokerId,
+  type BotDetail,
+  type BotListItem,
+  type ChartResponse,
+  type CostPreview,
+  type CostPreviewItem,
+  type Interval,
+  type LogLevel,
+  type Quote,
+  type StrategyId,
 } from '../shared/types.ts';
+import { fxAt, getFxHistory, getFxRate } from './market/fx.ts';
 import { getChart, getQuote, MarketDataError, RANGE_LABELS, RANGES, rangeFor, searchSymbols } from './market/yahoo.ts';
 import type { Repo } from './repo.ts';
 import { BacktestError, runBacktest } from './trading/backtest.ts';
+import { BROKER_IDS, BROKER_LIST, brokerName, costsSummary, fractionalAllowed, orderCosts } from './trading/costs.ts';
 import { sell, tickAllBots, tickBot } from './trading/engine.ts';
+import { sizeOrder } from './trading/portfolio.ts';
 import { downsample } from './trading/stats.ts';
 import { getStrategy, normalizeParams, STRATEGIES, STRATEGY_IDS } from './trading/strategies.ts';
 import { computeSummary, positionsView } from './trading/summary.ts';
@@ -75,6 +83,9 @@ const configSchema = z.object({
   takeProfitPct: z.number().min(0).max(1000),
   feePct: z.number().min(0).max(5),
   allowFractional: z.boolean(),
+  /** Devise du compte. Par défaut : la devise des actions si elles en ont toutes une seule, sinon le franc suisse. */
+  currency: z.enum(ACCOUNT_CURRENCIES).optional(),
+  broker: z.enum(BROKER_IDS as [BrokerId, ...BrokerId[]]).optional().default('simple'),
 });
 const createBotSchema = configSchema.extend({ name: z.string().trim().min(1).max(60) });
 const backtestSchema = configSchema.extend({ range: z.string() });
@@ -99,7 +110,9 @@ async function parseBody<T extends z.ZodType>(c: Context, schema: T): Promise<z.
 }
 
 /** Vérifie les paramètres et récupère le cours actuel de chaque action (ce qui valide aussi les symboles). */
-async function prepareConfig<T extends Omit<BotConfig, 'name'>>(input: T): Promise<{ cfg: T; quotes: Quote[]; currency: string }> {
+async function prepareConfig<T extends Omit<BotConfig, 'name' | 'currency'> & { currency?: string }>(
+  input: T,
+): Promise<{ cfg: T & { currency: string }; quotes: Quote[]; startFx: Record<string, number> }> {
   const strategy = getStrategy(input.strategy);
   const params = normalizeParams(input.strategy, input.params);
   const invalid = strategy.validate?.(params);
@@ -116,12 +129,23 @@ async function prepareConfig<T extends Omit<BotConfig, 'name'>>(input: T): Promi
       }
     }),
   );
+  // Les actions peuvent venir de plusieurs bourses (USD, CHF, EUR…) : chaque achat est converti au vrai taux de change.
   const currencies = [...new Set(quotes.map((q) => q.currency))];
-  if (currencies.length > 1) {
-    const detail = quotes.map((q) => `${q.symbol} : ${q.currency}`).join(', ');
-    throw new HttpError(400, `Toutes les actions doivent être cotées dans la même devise (${detail}). Créez un bot par marché.`);
-  }
-  return { cfg: { ...input, params, symbols }, quotes, currency: currencies[0] };
+  const single = currencies.length === 1 && (ACCOUNT_CURRENCIES as readonly string[]).includes(currencies[0]) ? currencies[0] : null;
+  const currency = input.currency ?? single ?? 'CHF';
+  const rates = await Promise.all(
+    currencies.map(async (c) => {
+      try {
+        return await getFxRate(c, currency);
+      } catch (err) {
+        if (err instanceof MarketDataError) throw new HttpError(400, err.message);
+        throw err;
+      }
+    }),
+  );
+  const fxOf = Object.fromEntries(currencies.map((c, i) => [c, rates[i]]));
+  const startFx = Object.fromEntries(symbols.map((s, i) => [s, fxOf[quotes[i].currency]]));
+  return { cfg: { ...input, params, symbols, currency }, quotes, startFx };
 }
 
 const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest();
@@ -184,6 +208,8 @@ export function createApi(deps: AppDeps): Hono {
         sinceStartPct: price !== null && start ? (price / start - 1) * 100 : null,
         dayChangePct: price !== null && prev ? (price / prev - 1) * 100 : null,
         spark: state.spark[symbol] ?? [],
+        currency: state.currency[symbol] ?? null,
+        fx: state.fx[symbol] ?? null,
         lastAnalysis: state.lastAnalysis[symbol] ?? null,
         session: state.session[symbol] ?? null,
       };
@@ -195,6 +221,8 @@ export function createApi(deps: AppDeps): Hono {
     const body: AppConfig = {
       authRequired: !!(await deps.adminPassword()),
       tickSeconds: deps.tickSeconds,
+      brokers: BROKER_LIST,
+      accountCurrencies: [...ACCOUNT_CURRENCIES],
       intervals: INTERVALS.map((id) => ({
         id,
         label: INTERVAL_LABELS[id],
@@ -230,6 +258,60 @@ export function createApi(deps: AppDeps): Hono {
     }
   });
 
+  // Aperçu des frais réels : ce que coûterait aujourd'hui un achat (puis sa revente) de chaque action choisie.
+  const previewSchema = z.object({
+    broker: z.enum(BROKER_IDS as [BrokerId, ...BrokerId[]]),
+    currency: z.enum(ACCOUNT_CURRENCIES),
+    amount: z.coerce.number().min(1).max(100_000_000),
+    feePct: z.coerce.number().min(0).max(5).optional().default(0),
+    fractional: z.enum(['0', '1']).optional().default('1'),
+    symbols: z.string().trim().min(1).max(250),
+  });
+  api.get('/costs/preview', async (c) => {
+    const parsed = previewSchema.safeParse(c.req.query());
+    if (!parsed.success) throw new HttpError(400, parsed.error.issues.map((i) => i.message).join(' ; '));
+    const { broker, currency, amount, feePct } = parsed.data;
+    const symbols = [...new Set(parsed.data.symbols.toUpperCase().split(','))].filter((s) => /^[A-Z0-9.\-=^]{1,20}$/.test(s)).slice(0, 10);
+    const now = Date.now();
+    const settled = await Promise.allSettled(
+      symbols.map(async (symbol): Promise<CostPreviewItem | string> => {
+        const quote = await getQuote(symbol);
+        const fxRate = await getFxRate(quote.currency, currency);
+        const base = { broker, symbol, price: quote.price, quoteCurrency: quote.currency, accountCurrency: currency, fxRate, feePct, time: now };
+        const order = sizeOrder({
+          budget: amount,
+          unitCost: quote.price * fxRate,
+          fractional: fractionalAllowed(broker, symbol, parsed.data.fractional === '1'),
+          costOf: (qty) => orderCosts({ ...base, side: 'BUY', qty }).total,
+        });
+        if (!order) return `${symbol} : une seule action coûte plus que ${amount.toFixed(0)} ${currency}, frais compris`;
+        const buy = orderCosts({ ...base, side: 'BUY', qty: order.qty });
+        const sellCosts = orderCosts({ ...base, side: 'SELL', qty: order.qty });
+        return {
+          symbol,
+          name: quote.name,
+          currency: quote.currency,
+          price: quote.price,
+          fxRate,
+          qty: order.qty,
+          value: order.gross,
+          buy: buy.lines,
+          buyTotal: buy.total,
+          sell: sellCosts.lines,
+          sellTotal: sellCosts.total,
+          breakEvenPct: ((buy.total + sellCosts.total) / order.gross) * 100,
+        };
+      }),
+    );
+    const body: CostPreview = { currency, amount, items: [], errors: [] };
+    settled.forEach((r, i) => {
+      if (r.status === 'rejected') body.errors.push(`${symbols[i]} : ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+      else if (typeof r.value === 'string') body.errors.push(r.value);
+      else body.items.push(r.value);
+    });
+    return c.json(body);
+  });
+
   // --- Bots ----------------------------------------------------------------
 
   api.get('/bots', async (c) => {
@@ -245,15 +327,15 @@ export function createApi(deps: AppDeps): Hono {
 
   api.post('/bots', requireAdmin, async (c) => {
     const input = await parseBody(c, createBotSchema);
-    const { cfg, quotes, currency } = await prepareConfig(input);
+    const { cfg, quotes, startFx } = await prepareConfig(input);
     const startPrices = Object.fromEntries(cfg.symbols.map((s, i) => [s, quotes[i].price]));
-    const id = await repo.insertBot(cfg, currency, startPrices, Date.now());
+    const id = await repo.insertBot(cfg, startPrices, startFx, Date.now());
     const strategy = getStrategy(cfg.strategy);
     await repo.insertLog(
       id,
       'info',
       null,
-      `Bot créé avec ${cfg.initialCapital.toFixed(2)} ${currency} — stratégie « ${strategy.info.name} », bougies de ${INTERVAL_LABELS[cfg.interval]}, actions suivies : ${cfg.symbols.join(', ')}`,
+      `Bot créé avec ${cfg.initialCapital.toFixed(2)} ${cfg.currency} — stratégie « ${strategy.info.name} », bougies de ${INTERVAL_LABELS[cfg.interval]}, tarifs ${brokerName(cfg.broker)}, actions suivies : ${cfg.symbols.join(', ')}`,
     );
     await tickBot(repo, id, { force: true });
     return c.json(await botDetail(id), 201);
@@ -280,9 +362,9 @@ export function createApi(deps: AppDeps): Hono {
 
   api.post('/bots/:id/reset', requireAdmin, async (c) => {
     const bot = await loadBot(c);
-    const { quotes } = await prepareConfig(bot);
+    const { quotes, startFx } = await prepareConfig(bot);
     const startPrices = Object.fromEntries(bot.symbols.map((s, i) => [s, quotes[i].price]));
-    await repo.resetBot(bot.id, startPrices, Date.now());
+    await repo.resetBot(bot.id, startPrices, startFx, Date.now());
     await repo.insertLog(bot.id, 'info', null, `Bot réinitialisé avec ${bot.initialCapital.toFixed(2)} ${bot.currency}`);
     await tickBot(repo, bot.id, { force: true });
     return c.json(await botDetail(bot.id));
@@ -301,7 +383,16 @@ export function createApi(deps: AppDeps): Hono {
     if (!position) throw new HttpError(404, 'Aucune position ouverte sur ce titre');
     const quote = await getQuote(symbol);
     if (!quote.marketOpen) throw new HttpError(409, 'Le marché est fermé : impossible de vendre maintenant.');
-    await sell(repo, bot, position, quote.price, 'manual', "Vente demandée à la main depuis le dashboard : ce n'est pas une décision du bot.", Date.now());
+    const fx = await getFxRate(quote.currency, bot.currency);
+    await sell(
+      repo,
+      bot,
+      position,
+      { price: quote.price, currency: quote.currency, fx },
+      'manual',
+      "Vente demandée à la main depuis le dashboard : ce n'est pas une décision du bot.",
+      Date.now(),
+    );
     return c.json(await botDetail(bot.id));
   });
 
@@ -317,7 +408,23 @@ export function createApi(deps: AppDeps): Hono {
       const s = v === null || v === undefined ? '' : String(v);
       return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ['Date', 'Symbole', 'Sens', 'Quantité', 'Prix', 'Frais', 'Montant', 'Résultat', 'Résultat %', 'Déclencheur', 'Raison', 'Liquidités après'];
+    const header = [
+      'Date',
+      'Symbole',
+      'Sens',
+      'Quantité',
+      'Prix',
+      'Devise de l’action',
+      `Taux de change vers ${bot.currency}`,
+      `Frais (${bot.currency})`,
+      'Détail des frais',
+      `Montant (${bot.currency})`,
+      `Résultat (${bot.currency})`,
+      'Résultat %',
+      'Déclencheur',
+      'Raison',
+      `Liquidités après (${bot.currency})`,
+    ];
     const lines = trades.map((t) =>
       [
         new Date(t.time).toISOString(),
@@ -325,7 +432,10 @@ export function createApi(deps: AppDeps): Hono {
         t.side === 'BUY' ? 'ACHAT' : 'VENTE',
         t.qty,
         t.price.toFixed(4),
+        t.currency || bot.currency,
+        t.fxRate.toFixed(6),
         t.fees.toFixed(2),
+        t.costs ? costsSummary(t.costs, bot.currency) : '',
         t.amount.toFixed(2),
         t.pnl?.toFixed(2) ?? '',
         t.pnlPct?.toFixed(2) ?? '',
@@ -389,7 +499,7 @@ export function createApi(deps: AppDeps): Hono {
     const input = await parseBody(c, backtestSchema);
     if (!RANGES[input.interval].includes(input.range))
       throw new HttpError(400, `Période non disponible pour des bougies de ${INTERVAL_LABELS[input.interval]}`);
-    const { cfg, currency } = await prepareConfig(input);
+    const { cfg, quotes, startFx } = await prepareConfig(input);
     const charts = await Promise.all(
       cfg.symbols.map(async (s) => {
         try {
@@ -401,9 +511,22 @@ export function createApi(deps: AppDeps): Hono {
       }),
     );
     const barsBySymbol = Object.fromEntries(cfg.symbols.map((s, i) => [s, charts[i]]));
+    // Historique réel des taux de change sur la même période, pour convertir chaque achat et chaque vente à la bonne date.
+    const currencyOf = Object.fromEntries(cfg.symbols.map((s, i) => [s, quotes[i].currency]));
+    const fxHistories = new Map<string, Bar[]>();
+    for (const c of new Set(Object.values(currencyOf))) {
+      if (c === cfg.currency) continue;
+      try {
+        fxHistories.set(c, await getFxHistory(c, cfg.currency, cfg.interval, cfg.range));
+      } catch (err) {
+        if (err instanceof MarketDataError) throw new HttpError(502, `Taux de change ${c} → ${cfg.currency} : ${err.message}`);
+        throw err;
+      }
+    }
+    const fxBySymbol = Object.fromEntries(cfg.symbols.map((s) => [s, fxAt(fxHistories.get(currencyOf[s]) ?? [], startFx[s] ?? 1)]));
     let result;
     try {
-      result = runBacktest(cfg, barsBySymbol);
+      result = runBacktest(cfg, barsBySymbol, { currencyOf, fxBySymbol });
     } catch (err) {
       if (err instanceof BacktestError) throw new HttpError(400, err.message);
       throw err;
@@ -411,7 +534,7 @@ export function createApi(deps: AppDeps): Hono {
     const strategy = getStrategy(cfg.strategy);
     const body: BacktestResult = {
       ...result,
-      currency,
+      currency: cfg.currency,
       range: cfg.range,
       overlays: strategy.overlays(cfg.params),
       charts: Object.fromEntries(cfg.symbols.map((s) => [s, { bars: barsBySymbol[s], series: strategy.compute(barsBySymbol[s], cfg.params) }])),

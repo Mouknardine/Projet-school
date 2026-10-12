@@ -26,12 +26,7 @@ export function useAppData(): AppData {
 }
 
 function Logo() {
-  return (
-    <svg viewBox="0 0 32 32" className="size-8" aria-hidden>
-      <rect width="32" height="32" rx="9" fill="#3987e5" />
-      <path d="M7 21.5l5.5-6.5 4.5 3.5 8-9.5" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <img src="/icon.svg" alt="" className="size-9 shrink-0 rounded-[10px]" width={36} height={36} />;
 }
 
 /** Les menus, avec un libellé court (barre du bas sur mobile) et un libellé complet (barre latérale). */
@@ -109,7 +104,7 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
       </aside>
 
       {/* Barre du haut (mobile / tablette) : le nom de l'app et le rappel qu'il s'agit d'une simulation. */}
-      <header className="sticky top-0 z-30 border-b border-line bg-page/90 backdrop-blur lg:hidden">
+      <header className="pt-safe sticky top-0 z-30 border-b border-line bg-page/90 backdrop-blur lg:hidden">
         <div className="flex items-center gap-2.5 px-4 py-2.5">
           <Link to="/" className="flex items-center gap-2">
             <Logo />

@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS bots (
   take_profit_pct   REAL    NOT NULL,
   fee_pct           REAL    NOT NULL,
   allow_fractional  INTEGER NOT NULL,
+  broker            TEXT    NOT NULL DEFAULT 'simple',
   start_prices      TEXT    NOT NULL,
+  start_fx          TEXT    NOT NULL DEFAULT '{}',
   state             TEXT    NOT NULL DEFAULT '{}',
   started_at        INTEGER NOT NULL,
   last_tick_at      INTEGER,
@@ -46,11 +48,14 @@ CREATE TABLE IF NOT EXISTS positions (
   bot_id        INTEGER NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
   symbol        TEXT    NOT NULL,
   qty           REAL    NOT NULL,
+  currency      TEXT    NOT NULL DEFAULT '',
   entry_price   REAL    NOT NULL,
+  entry_fx      REAL    NOT NULL DEFAULT 1,
   cost_basis    REAL    NOT NULL,
   opened_at     INTEGER NOT NULL,
   last_price    REAL,
   last_price_at INTEGER,
+  last_fx       REAL    NOT NULL DEFAULT 1,
   PRIMARY KEY (bot_id, symbol)
 );
 
@@ -62,7 +67,10 @@ CREATE TABLE IF NOT EXISTS trades (
   side       TEXT    NOT NULL,
   qty        REAL    NOT NULL,
   price      REAL    NOT NULL,
+  currency   TEXT    NOT NULL DEFAULT '',
+  fx_rate    REAL    NOT NULL DEFAULT 1,
   fees       REAL    NOT NULL,
+  costs      TEXT,
   amount     REAL    NOT NULL,
   pnl        REAL,
   pnl_pct    REAL,
@@ -99,9 +107,14 @@ export function createSqliteRepo(dbPath: string): Repo {
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
-  // Base créée par une ancienne version : ajoute la colonne du verrou si elle manque.
-  const columns = (db.prepare('PRAGMA table_info(bots)').all() as Row[]).map((c) => c.name);
-  if (!columns.includes('lock_until')) db.exec('ALTER TABLE bots ADD COLUMN lock_until INTEGER');
+  // Base créée par une ancienne version : ajoute les colonnes manquantes.
+  const addColumns = (table: string, defs: Record<string, string>) => {
+    const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as Row[]).map((c) => c.name);
+    for (const [name, def] of Object.entries(defs)) if (!columns.includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`);
+  };
+  addColumns('bots', { lock_until: 'INTEGER', broker: "TEXT NOT NULL DEFAULT 'simple'", start_fx: "TEXT NOT NULL DEFAULT '{}'" });
+  addColumns('positions', { currency: "TEXT NOT NULL DEFAULT ''", entry_fx: 'REAL NOT NULL DEFAULT 1', last_fx: 'REAL NOT NULL DEFAULT 1' });
+  addColumns('trades', { currency: "TEXT NOT NULL DEFAULT ''", fx_rate: 'REAL NOT NULL DEFAULT 1', costs: 'TEXT' });
 
   const run = (sql: string, ...params: any[]) => db.prepare(sql).run(...params);
   const get = (sql: string, ...params: any[]) => db.prepare(sql).get(...params) as Row | undefined;
@@ -116,17 +129,17 @@ export function createSqliteRepo(dbPath: string): Repo {
       const row = get('SELECT * FROM bots WHERE id = ?', id);
       return row ? botFromRow(row) : undefined;
     },
-    async insertBot(cfg: BotConfig, currency, startPrices, now) {
+    async insertBot(cfg: BotConfig, startPrices, startFx, now) {
       const res = run(
         `INSERT INTO bots (name, strategy, params, symbols, interval, currency, initial_capital, cash,
-           position_size_pct, stop_loss_pct, take_profit_pct, fee_pct, allow_fractional, start_prices, started_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           position_size_pct, stop_loss_pct, take_profit_pct, fee_pct, allow_fractional, broker, start_prices, start_fx, started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         cfg.name,
         cfg.strategy,
         JSON.stringify(cfg.params),
         JSON.stringify(cfg.symbols),
         cfg.interval,
-        currency,
+        cfg.currency,
         cfg.initialCapital,
         cfg.initialCapital,
         cfg.positionSizePct,
@@ -134,7 +147,9 @@ export function createSqliteRepo(dbPath: string): Repo {
         cfg.takeProfitPct,
         cfg.feePct,
         cfg.allowFractional ? 1 : 0,
+        cfg.broker,
         JSON.stringify(startPrices),
+        JSON.stringify(startFx),
         now,
       );
       return Number(res.lastInsertRowid);
@@ -160,13 +175,14 @@ export function createSqliteRepo(dbPath: string): Repo {
     async deleteBot(id) {
       run('DELETE FROM bots WHERE id = ?', id);
     },
-    async resetBot(id, startPrices, now) {
+    async resetBot(id, startPrices, startFx, now) {
       await repo.transaction(async () => {
         for (const table of ['positions', 'trades', 'equity', 'logs']) run(`DELETE FROM ${table} WHERE bot_id = ?`, id);
         run(
-          `UPDATE bots SET cash = initial_capital, state = '{}', start_prices = ?, started_at = ?, last_tick_at = NULL, last_error = NULL
+          `UPDATE bots SET cash = initial_capital, state = '{}', start_prices = ?, start_fx = ?, started_at = ?, last_tick_at = NULL, last_error = NULL
            WHERE id = ?`,
           JSON.stringify(startPrices),
+          JSON.stringify(startFx),
           now,
           id,
         );
@@ -189,36 +205,42 @@ export function createSqliteRepo(dbPath: string): Repo {
     },
     async insertPosition(botId, p: PositionRow) {
       run(
-        `INSERT INTO positions (bot_id, symbol, qty, entry_price, cost_basis, opened_at, last_price, last_price_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO positions (bot_id, symbol, qty, currency, entry_price, entry_fx, cost_basis, opened_at, last_price, last_price_at, last_fx)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         botId,
         p.symbol,
         p.qty,
+        p.currency,
         p.entryPrice,
+        p.entryFx,
         p.costBasis,
         p.openedAt,
         p.lastPrice,
         p.lastPriceAt,
+        p.lastFx,
       );
     },
     async deletePosition(botId, symbol) {
       run('DELETE FROM positions WHERE bot_id = ? AND symbol = ?', botId, symbol);
     },
-    async updatePositionPrice(botId, symbol, price, time) {
-      run('UPDATE positions SET last_price = ?, last_price_at = ? WHERE bot_id = ? AND symbol = ?', price, time, botId, symbol);
+    async updatePositionPrice(botId, symbol, price, fx, time) {
+      run('UPDATE positions SET last_price = ?, last_fx = ?, last_price_at = ? WHERE bot_id = ? AND symbol = ?', price, fx, time, botId, symbol);
     },
 
     async insertTrade(botId, t: NewTrade) {
       const res = run(
-        `INSERT INTO trades (bot_id, time, symbol, side, qty, price, fees, amount, pnl, pnl_pct, reason, trigger, cash_after)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO trades (bot_id, time, symbol, side, qty, price, currency, fx_rate, fees, costs, amount, pnl, pnl_pct, reason, trigger, cash_after)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         botId,
         t.time,
         t.symbol,
         t.side,
         t.qty,
         t.price,
+        t.currency,
+        t.fxRate,
         t.fees,
+        JSON.stringify(t.costs),
         t.amount,
         t.pnl,
         t.pnlPct,

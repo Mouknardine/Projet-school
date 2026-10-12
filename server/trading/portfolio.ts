@@ -38,6 +38,31 @@ export function sizeBuy(input: SizingInput): BuyOrder | null {
   return { qty, gross, fees, total: gross + fees };
 }
 
+/**
+ * Version réaliste : calcule la plus grande quantité achetable avec `budget` (dans la devise du compte),
+ * en tenant compte des vrais frais, qui ne sont pas proportionnels (barèmes par paliers, minimums…).
+ * `unitCost` est le prix d'une action converti dans la devise du compte, `costOf(qty)` le total des frais.
+ */
+export function sizeOrder(input: { budget: number; unitCost: number; fractional: boolean; costOf: (qty: number) => number }): BuyOrder | null {
+  const { budget, unitCost, fractional, costOf } = input;
+  if (!(unitCost > 0) || !(budget > 0)) return null;
+  const step = fractional ? 0.0001 : 1;
+  const fits = (n: number) => n * step * unitCost + costOf(n * step) <= budget + 1e-9;
+  // Recherche dichotomique : plus on achète, plus le total (prix + frais) est élevé.
+  let lo = 0;
+  let hi = Math.floor(budget / unitCost / step);
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (fits(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  const qty = Number((lo * step).toFixed(fractional ? 4 : 0));
+  const gross = qty * unitCost;
+  if (qty <= 0 || gross < MIN_ORDER_VALUE) return null;
+  const fees = costOf(qty);
+  return { qty, gross, fees, total: gross + fees };
+}
+
 export interface SellResult {
   gross: number;
   fees: number;

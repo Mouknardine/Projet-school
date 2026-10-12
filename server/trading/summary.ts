@@ -8,7 +8,8 @@ import { downsample, maxDrawdownPct } from './stats.ts';
 export async function positionsView(repo: Repo, bot: Bot): Promise<Position[]> {
   return (await repo.getPositions(bot.id)).map((p) => {
     const price = p.lastPrice ?? p.entryPrice;
-    const marketValue = p.qty * price;
+    // Cours dans la devise de l'action × taux de change → valeur dans la devise du compte.
+    const marketValue = p.qty * price * p.lastFx;
     const unrealizedPnl = marketValue - p.costBasis;
     return {
       ...p,

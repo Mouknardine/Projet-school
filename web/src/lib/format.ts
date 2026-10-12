@@ -11,7 +11,7 @@ export function fmtNum(n: number | null | undefined, digits = 2): string {
 
 export function fmtMoney(n: number | null | undefined, currency: string, digits = 2): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '–';
-  return `${fmtNum(n, digits)} ${currency}`;
+  return `${fmtNum(n, digits)}\u00a0${currency}`;
 }
 
 export function fmtPrice(n: number | null | undefined): string {
@@ -26,7 +26,7 @@ export function fmtQty(n: number): string {
 export function fmtPct(n: number | null | undefined, digits = 2, withSign = true): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '–';
   const sign = withSign && n > 0 ? '+' : '';
-  return `${sign}${fmtNum(n, digits)} %`;
+  return `${sign}${fmtNum(n, digits)}\u00a0%`;
 }
 
 export function fmtSignedMoney(n: number | null | undefined, currency: string): string {
@@ -60,6 +60,17 @@ export function fmtDuration(ms: number): string {
   const h = Math.floor(ms / 3_600_000);
   if (h >= 1) return `${h} h`;
   return `${Math.max(1, Math.floor(ms / 60_000))} min`;
+}
+
+/**
+ * Espaces insécables du français : évite qu'un « % », une devise ou un « : » se retrouve seul en début de ligne,
+ * et qu'un nombre comme « 10 000 » soit coupé en deux.
+ */
+export function nbsp(text: string): string {
+  return text
+    .replace(/(\d) (?=\d{3}(?!\d))/g, '$1\u00a0')
+    .replace(/ (%|CHF|USD|EUR|GBP|:|;|\?|!|»)/g, '\u00a0$1')
+    .replace(/« /g, '«\u00a0');
 }
 
 /** Couleur d'un gain (vert) ou d'une perte (rouge). */

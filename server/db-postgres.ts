@@ -34,7 +34,9 @@ create table if not exists bots (
   take_profit_pct   double precision not null,
   fee_pct           double precision not null,
   allow_fractional  boolean          not null,
+  broker            text             not null default 'simple',
   start_prices      jsonb            not null,
+  start_fx          jsonb            not null default '{}'::jsonb,
   state             jsonb            not null default '{}'::jsonb,
   started_at        bigint           not null,
   last_tick_at      bigint,
@@ -46,11 +48,14 @@ create table if not exists positions (
   bot_id        bigint           not null references bots(id) on delete cascade,
   symbol        text             not null,
   qty           double precision not null,
+  currency      text             not null default '',
   entry_price   double precision not null,
+  entry_fx      double precision not null default 1,
   cost_basis    double precision not null,
   opened_at     bigint           not null,
   last_price    double precision,
   last_price_at bigint,
+  last_fx       double precision not null default 1,
   primary key (bot_id, symbol)
 );
 
@@ -62,7 +67,10 @@ create table if not exists trades (
   side       text             not null,
   qty        double precision not null,
   price      double precision not null,
+  currency   text             not null default '',
+  fx_rate    double precision not null default 1,
   fees       double precision not null,
+  costs      jsonb,
   amount     double precision not null,
   pnl        double precision,
   pnl_pct    double precision,
@@ -91,6 +99,16 @@ create table if not exists logs (
 );
 create index if not exists logs_bot_id on logs(bot_id, id);
 
+-- Colonnes ajoutées après la première version (devises, change et détail des frais).
+alter table bots add column if not exists broker text not null default 'simple';
+alter table bots add column if not exists start_fx jsonb not null default '{}'::jsonb;
+alter table positions add column if not exists currency text not null default '';
+alter table positions add column if not exists entry_fx double precision not null default 1;
+alter table positions add column if not exists last_fx double precision not null default 1;
+alter table trades add column if not exists currency text not null default '';
+alter table trades add column if not exists fx_rate double precision not null default 1;
+alter table trades add column if not exists costs jsonb;
+
 -- Les tables ne sont accessibles qu'au serveur (aucun accès direct depuis le navigateur).
 alter table bots enable row level security;
 alter table positions enable row level security;
@@ -116,13 +134,13 @@ export function createPostgresRepo(sql: Sql): Repo {
       const [row] = await sql`select * from bots where id = ${id}`;
       return row ? botFromRow(row) : undefined;
     },
-    async insertBot(cfg: BotConfig, currency, startPrices, now) {
+    async insertBot(cfg: BotConfig, startPrices, startFx, now) {
       const [row] = await sql`
         insert into bots (name, strategy, params, symbols, "interval", currency, initial_capital, cash,
-          position_size_pct, stop_loss_pct, take_profit_pct, fee_pct, allow_fractional, start_prices, started_at)
-        values (${cfg.name}, ${cfg.strategy}, ${json(cfg.params)}::jsonb, ${json(cfg.symbols)}::jsonb, ${cfg.interval}, ${currency},
+          position_size_pct, stop_loss_pct, take_profit_pct, fee_pct, allow_fractional, broker, start_prices, start_fx, started_at)
+        values (${cfg.name}, ${cfg.strategy}, ${json(cfg.params)}::jsonb, ${json(cfg.symbols)}::jsonb, ${cfg.interval}, ${cfg.currency},
           ${cfg.initialCapital}, ${cfg.initialCapital}, ${cfg.positionSizePct}, ${cfg.stopLossPct}, ${cfg.takeProfitPct},
-          ${cfg.feePct}, ${cfg.allowFractional}, ${json(startPrices)}::jsonb, ${now})
+          ${cfg.feePct}, ${cfg.allowFractional}, ${cfg.broker}, ${json(startPrices)}::jsonb, ${json(startFx)}::jsonb, ${now})
         returning id`;
       return Number(row.id);
     },
@@ -148,14 +166,14 @@ export function createPostgresRepo(sql: Sql): Repo {
     async deleteBot(id) {
       await sql`delete from bots where id = ${id}`;
     },
-    async resetBot(id, startPrices, now) {
+    async resetBot(id, startPrices, startFx, now) {
       const exec = async (s: Sql) => {
         await s`delete from positions where bot_id = ${id}`;
         await s`delete from trades where bot_id = ${id}`;
         await s`delete from equity where bot_id = ${id}`;
         await s`delete from logs where bot_id = ${id}`;
         await s`update bots set cash = initial_capital, state = '{}'::jsonb, start_prices = ${json(startPrices)}::jsonb,
-                 started_at = ${now}, last_tick_at = null, last_error = null where id = ${id}`;
+                 start_fx = ${json(startFx)}::jsonb, started_at = ${now}, last_tick_at = null, last_error = null where id = ${id}`;
       };
       if ('begin' in sql) await (sql as postgres.Sql).begin((tx) => exec(tx));
       else await exec(sql);
@@ -177,21 +195,22 @@ export function createPostgresRepo(sql: Sql): Repo {
       return row ? positionFromRow(row) : undefined;
     },
     async insertPosition(botId, p: PositionRow) {
-      await sql`insert into positions (bot_id, symbol, qty, entry_price, cost_basis, opened_at, last_price, last_price_at)
-        values (${botId}, ${p.symbol}, ${p.qty}, ${p.entryPrice}, ${p.costBasis}, ${p.openedAt}, ${p.lastPrice}, ${p.lastPriceAt})`;
+      await sql`insert into positions (bot_id, symbol, qty, currency, entry_price, entry_fx, cost_basis, opened_at, last_price, last_price_at, last_fx)
+        values (${botId}, ${p.symbol}, ${p.qty}, ${p.currency}, ${p.entryPrice}, ${p.entryFx}, ${p.costBasis}, ${p.openedAt}, ${p.lastPrice},
+          ${p.lastPriceAt}, ${p.lastFx})`;
     },
     async deletePosition(botId, symbol) {
       await sql`delete from positions where bot_id = ${botId} and symbol = ${symbol}`;
     },
-    async updatePositionPrice(botId, symbol, price, time) {
-      await sql`update positions set last_price = ${price}, last_price_at = ${time} where bot_id = ${botId} and symbol = ${symbol}`;
+    async updatePositionPrice(botId, symbol, price, fx, time) {
+      await sql`update positions set last_price = ${price}, last_fx = ${fx}, last_price_at = ${time} where bot_id = ${botId} and symbol = ${symbol}`;
     },
 
     async insertTrade(botId, t: NewTrade) {
       const [row] = await sql`
-        insert into trades (bot_id, time, symbol, side, qty, price, fees, amount, pnl, pnl_pct, reason, "trigger", cash_after)
-        values (${botId}, ${t.time}, ${t.symbol}, ${t.side}, ${t.qty}, ${t.price}, ${t.fees}, ${t.amount}, ${t.pnl}, ${t.pnlPct},
-          ${t.reason}, ${t.trigger}, ${t.cashAfter})
+        insert into trades (bot_id, time, symbol, side, qty, price, currency, fx_rate, fees, costs, amount, pnl, pnl_pct, reason, "trigger", cash_after)
+        values (${botId}, ${t.time}, ${t.symbol}, ${t.side}, ${t.qty}, ${t.price}, ${t.currency}, ${t.fxRate}, ${t.fees}, ${json(t.costs)}::jsonb,
+          ${t.amount}, ${t.pnl}, ${t.pnlPct}, ${t.reason}, ${t.trigger}, ${t.cashAfter})
         returning id`;
       return Number(row.id);
     },

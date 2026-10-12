@@ -6,6 +6,8 @@ import { normalizeParams } from '../server/trading/strategies.ts';
 import { approx, barsFromCloses } from './helpers.ts';
 
 const base: Omit<BotConfig, 'name'> = {
+  currency: 'USD',
+  broker: 'simple',
   initialCapital: 10_000,
   symbols: ['TEST'],
   strategy: 'sma_cross',

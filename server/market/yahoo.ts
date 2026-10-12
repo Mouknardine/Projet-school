@@ -113,6 +113,18 @@ export function parseChart(json: any, now = Date.now()): ChartData {
   });
   const bars = [...byTime.values()].sort((a, b) => a.time - b.time);
 
+  // La Bourse de Londres cote en pence (GBp) : on convertit en livres pour pouvoir appliquer le taux de change GBP.
+  if (meta.currency === 'GBp' || meta.currency === 'GBX') {
+    for (const b of bars) {
+      b.open /= 100;
+      b.high /= 100;
+      b.low /= 100;
+      b.close /= 100;
+    }
+    meta.currency = 'GBP';
+    for (const k of ['regularMarketPrice', 'chartPreviousClose', 'previousClose']) if (typeof meta[k] === 'number') meta[k] /= 100;
+  }
+
   const last = bars[bars.length - 1];
   const price: number | undefined = meta.regularMarketPrice ?? last?.close;
   if (price === undefined) throw new MarketDataError(`Aucun cours disponible pour ${meta.symbol ?? 'ce symbole'}`);

@@ -9,6 +9,7 @@ import type {
   BotListItem,
   BotStatus,
   ChartResponse,
+  CostPreview,
   EquityPoint,
   LogEntry,
   StrategyInfo,
@@ -85,6 +86,18 @@ export const api = {
   config: () => request<AppConfig>('GET', '/config'),
   strategies: () => request<StrategyInfo[]>('GET', '/strategies'),
   search: (q: string) => request<SymbolSearchResult[]>('GET', `/market/search?q=${encodeURIComponent(q)}`),
+  costPreview: (p: { broker: string; currency: string; amount: number; feePct: number; fractional: boolean; symbols: string[] }) =>
+    request<CostPreview>(
+      'GET',
+      `/costs/preview?${new URLSearchParams({
+        broker: p.broker,
+        currency: p.currency,
+        amount: String(Math.round(p.amount * 100) / 100),
+        feePct: String(p.feePct),
+        fractional: p.fractional ? '1' : '0',
+        symbols: p.symbols.join(','),
+      })}`,
+    ),
 
   bots: () => request<BotListItem[]>('GET', '/bots'),
   bot: (id: number) => request<BotDetail>('GET', `/bots/${id}`),

@@ -4,7 +4,7 @@
 import { ArrowDownRight, ArrowUpRight, ChevronRight, Hand, ShieldAlert, Target, Zap } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { StrategyInfo, Trade, TradeTrigger } from '../../../shared/types.ts';
-import { fmtDateTime, fmtDuration, fmtMoney, fmtPct, fmtPrice, fmtQty, fmtSignedMoney, pnlClass } from '../lib/format.ts';
+import { fmtDateTime, fmtDuration, fmtMoney, fmtNum, fmtPct, fmtPrice, fmtQty, fmtSignedMoney, nbsp, pnlClass } from '../lib/format.ts';
 import { Badge, cx, EmptyState, Segmented, Sheet } from './ui.tsx';
 
 type Row = Omit<Trade, 'id' | 'botId'> & { id?: number };
@@ -211,7 +211,7 @@ function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
         <SideIcon buy={buy} className="size-11 [&_svg]:size-6" />
         <div className="min-w-0">
           <p className="text-lg font-semibold leading-snug text-ink">
-            Le bot a {buy ? 'acheté' : 'vendu'} {fmtQty(t.qty)} {t.symbol} à {fmtPrice(t.price)} {currency}
+            Le bot a {buy ? 'acheté' : 'vendu'} {fmtQty(t.qty)} {t.symbol} à {fmtPrice(t.price)} {t.currency || currency}
           </p>
           <p className="mt-0.5 text-xs text-ink-3">
             {name ? `${name} · ` : ''}le {fmtDay(t.time)} à {fmtTime(t.time)}
@@ -224,10 +224,11 @@ function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
           <dd className="mt-0.5 font-semibold text-ink">{fmtMoney(t.amount, currency)}</dd>
         </div>
         <div className="rounded-xl bg-page/60 px-3 py-2.5">
-          <dt className="text-xs text-ink-3">dont frais de courtage</dt>
+          <dt className="text-xs text-ink-3">dont frais</dt>
           <dd className="mt-0.5 font-semibold text-ink">{fmtMoney(t.fees, currency)}</dd>
         </div>
       </dl>
+      <Receipt trade={t} currency={currency} />
 
       {/* La raison */}
       <Section title={buy ? 'Pourquoi le bot a acheté' : 'Pourquoi le bot a vendu'}>
@@ -258,13 +259,13 @@ function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
               <ol className="num mt-3 space-y-2 border-t border-line pt-3 text-xs">
                 <li className="flex items-center justify-between gap-3">
                   <span className="text-ink-3">
-                    Acheté le {fmtDateTime(entry.time)} à {fmtPrice(entry.price)}
+                    Acheté le {fmtDateTime(entry.time)} à {fmtPrice(entry.price)} {entry.currency || ''}
                   </span>
                   <span className="text-ink-2">−{fmtMoney(entry.amount, currency)}</span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
                   <span className="text-ink-3">
-                    Vendu le {fmtDateTime(t.time)} à {fmtPrice(t.price)}
+                    Vendu le {fmtDateTime(t.time)} à {fmtPrice(t.price)} {t.currency || ''}
                   </span>
                   <span className="text-ink-2">+{fmtMoney(t.amount, currency)}</span>
                 </li>
@@ -330,6 +331,57 @@ function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
         </Section>
       )}
     </div>
+  );
+}
+
+/** Le décompte de l'ordre, comme sur un avis d'exécution de banque : valeur des actions, change, chaque frais, total. */
+function Receipt({ trade: t, currency }: { trade: Row; currency: string }) {
+  const buy = t.side === 'BUY';
+  const quoteCur = t.currency || currency;
+  const fx = t.fxRate || 1;
+  const gross = buy ? t.amount - t.fees : t.amount + t.fees;
+  const lines = t.costs ?? (t.fees > 0 ? [{ label: 'Frais de courtage', amount: t.fees, detail: '' }] : []);
+  return (
+    <details className="group mt-2 rounded-xl bg-page/60 px-3 py-2.5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-medium text-accent-text [&::-webkit-details-marker]:hidden">
+        Voir le détail des frais{quoteCur !== currency ? ' et du change' : ''}
+        <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
+      </summary>
+      <ul className="num mt-2.5 space-y-1.5 text-xs">
+        <li className="flex items-baseline justify-between gap-3">
+          <span className="text-ink-3">
+            {fmtQty(t.qty)} × {fmtPrice(t.price)} {quoteCur}
+            {quoteCur !== currency && (
+              <>
+                {' '}
+                = {fmtMoney(t.qty * t.price, quoteCur)}, au taux de 1 {quoteCur} = {fmtNum(fx, 4)} {currency}
+              </>
+            )}
+          </span>
+          <span className="shrink-0 text-ink">{fmtMoney(gross, currency)}</span>
+        </li>
+        {lines.map((l) => (
+          <li key={l.label} className="flex items-baseline justify-between gap-3">
+            <span className="text-ink-3">
+              {l.label}
+              {l.detail && <span className="block text-[11px] text-ink-3/80">{nbsp(l.detail)}</span>}
+            </span>
+            <span className="shrink-0 text-ink-2">
+              {buy ? '+' : '−'} {fmtMoney(l.amount, currency)}
+            </span>
+          </li>
+        ))}
+        <li className="flex items-baseline justify-between gap-3 border-t border-line pt-1.5 font-semibold text-ink">
+          <span>{buy ? 'Total payé' : 'Total reçu'}</span>
+          <span className="shrink-0">{fmtMoney(t.amount, currency)}</span>
+        </li>
+      </ul>
+      {gross > 0 && (
+        <p className="mt-2 text-[11px] text-ink-3">
+          Les frais représentent {fmtPct((t.fees / gross) * 100, 2, false)} du montant de l'ordre.
+        </p>
+      )}
+    </details>
   );
 }
 
