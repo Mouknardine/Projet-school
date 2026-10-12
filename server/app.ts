@@ -184,6 +184,8 @@ export function createApi(deps: AppDeps): Hono {
         sinceStartPct: price !== null && start ? (price / start - 1) * 100 : null,
         dayChangePct: price !== null && prev ? (price / prev - 1) * 100 : null,
         spark: state.spark[symbol] ?? [],
+        lastAnalysis: state.lastAnalysis[symbol] ?? null,
+        session: state.session[symbol] ?? null,
       };
     });
     return { bot, summary: await computeSummary(repo, bot, positions), positions, strategy: getStrategy(bot.strategy).info, watchlist };
@@ -233,7 +235,11 @@ export function createApi(deps: AppDeps): Hono {
   api.get('/bots', async (c) => {
     const bots = await repo.listBots();
     const items: BotListItem[] = [];
-    for (const bot of bots) items.push({ bot, summary: await computeSummary(repo, bot) });
+    for (const bot of bots) {
+      const state = await repo.getBotState(bot.id);
+      const seen = bot.symbols.map((s) => state.marketOpen[s]).filter((v) => v !== undefined);
+      items.push({ bot, summary: await computeSummary(repo, bot), marketOpen: seen.length ? seen.some(Boolean) : null });
+    }
     return c.json(items);
   });
 

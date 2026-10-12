@@ -116,8 +116,14 @@ export function BotsPage() {
 
       {data && data.length > 0 && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
-          {data.map(({ bot, summary }) => {
+          {data.map(({ bot, summary, marketOpen }) => {
             const vsBench = summary.benchmarkPnlPct !== null ? summary.pnlPct - summary.benchmarkPnlPct : null;
+            const running = bot.status === 'running';
+            const status = !running
+              ? { tone: 'warn' as const, label: 'En pause' }
+              : marketOpen
+                ? { tone: 'up' as const, label: 'Actif · bourse ouverte' }
+                : { tone: 'neutral' as const, label: 'Actif · bourse fermée' };
             return (
               <Link
                 key={bot.id}
@@ -126,12 +132,12 @@ export function BotsPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate font-semibold text-ink">{bot.name}</div>
-                    <div className="mt-0.5 truncate text-xs text-ink-3">Stratégie : {strategyName(bot.strategy)}</div>
+                    <div className="font-semibold leading-snug text-ink">{bot.name}</div>
+                    <div className="mt-0.5 text-xs text-ink-3">Stratégie : {strategyName(bot.strategy)}</div>
                   </div>
-                  <Badge tone={bot.status === 'running' ? 'up' : 'warn'}>
-                    <LiveDot on={bot.status === 'running'} />
-                    {bot.status === 'running' ? 'Actif' : 'En pause'}
+                  <Badge tone={status.tone} className="shrink-0">
+                    <LiveDot on={running && !!marketOpen} />
+                    {status.label}
                   </Badge>
                 </div>
 
@@ -146,6 +152,17 @@ export function BotsPage() {
                   </div>
                   <Sparkline values={summary.sparkline} base={bot.initialCapital} color={SERIES[0]} className="h-12 w-32 shrink-0" />
                 </div>
+
+                {summary.tradesCount === 0 && (
+                  <p className="mt-4 rounded-lg bg-raised/70 px-3 py-2 text-xs leading-relaxed text-ink-2">
+                    <b className="font-semibold text-ink">Rien acheté pour l'instant : </b>
+                    {!running
+                      ? 'le bot est en pause.'
+                      : marketOpen === false
+                        ? "la bourse est fermée, il commencera à la prochaine ouverture."
+                        : "il attend le bon moment selon sa stratégie. Ouvrez-le pour voir ce qu'il attend pour chaque action."}
+                  </p>
+                )}
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {bot.symbols.map((s, i) => (

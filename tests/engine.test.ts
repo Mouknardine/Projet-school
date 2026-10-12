@@ -53,6 +53,8 @@ describe('moteur du bot en direct', () => {
     assert.equal(trades.length, 1);
     assert.equal(trades[0].side, 'BUY');
     assert.match(trades[0].reason, /La tendance devient haussière/);
+    // Le dashboard affiche ce que le bot a pensé de cette action.
+    assert.match(state.lastAnalysis.TEST.text, /^Acheté\. La tendance devient haussière/);
     assert.equal(trades[0].qty, 47); // 5000 / (106 × 1.001) = 47.1
     const pos = await repo.getPosition(bot.id, 'TEST');
     assert.ok(pos);
@@ -68,6 +70,7 @@ describe('moteur du bot en direct', () => {
     assert.equal(after.length, 2);
     assert.equal(after[0].side, 'SELL');
     assert.equal(after[0].trigger, 'stop_loss');
+    assert.match(state.lastAnalysis.TEST.text, /^Vendu automatiquement\. Protection contre les pertes/);
     assert.ok((after[0].pnl as number) < 0);
     assert.equal(await repo.getPosition(bot.id, 'TEST'), undefined);
 

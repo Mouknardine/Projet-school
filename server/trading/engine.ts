@@ -139,6 +139,11 @@ export async function processSymbol(
   if (quote.name) state.names[symbol] = quote.name;
   if (quote.previousClose) state.prevClose[symbol] = quote.previousClose;
   state.spark[symbol] = [...data.bars.slice(-47).map((b) => b.close), price];
+  if (quote.session) state.session[symbol] = quote.session;
+  // Ce que le bot « pense » de cette action, affiché sur le dashboard à côté de son cours.
+  const think = (text: string) => {
+    state.lastAnalysis[symbol] = { time: now, text };
+  };
 
   if (state.marketOpen[symbol] !== quote.marketOpen) {
     await repo.insertLog(
@@ -162,11 +167,15 @@ export async function processSymbol(
     const sl = stopLossPrice(position.entryPrice, bot.stopLossPct);
     const tp = takeProfitPrice(position.entryPrice, bot.takeProfitPct);
     if (sl !== null && price <= sl) {
-      await sell(repo, bot, position, price, 'stop_loss', exitReason('stop_loss', price, position.entryPrice, bot.stopLossPct), now);
+      const reason = exitReason('stop_loss', price, position.entryPrice, bot.stopLossPct);
+      await sell(repo, bot, position, price, 'stop_loss', reason, now);
+      think(`Vendu automatiquement. ${reason}`);
       position = undefined;
       exitedNow = true;
     } else if (tp !== null && price >= tp) {
-      await sell(repo, bot, position, price, 'take_profit', exitReason('take_profit', price, position.entryPrice, bot.takeProfitPct), now);
+      const reason = exitReason('take_profit', price, position.entryPrice, bot.takeProfitPct);
+      await sell(repo, bot, position, price, 'take_profit', reason, now);
+      think(`Vendu automatiquement. ${reason}`);
       position = undefined;
       exitedNow = true;
     }
@@ -183,7 +192,9 @@ export async function processSymbol(
 
   const warmup = strategy.warmup(bot.params);
   if (bars.length < warmup) {
-    await repo.insertLog(bot.id, 'warn', symbol, `Pas encore assez d'historique de cours pour la stratégie (${bars.length} bougies sur ${warmup} nécessaires) : le bot attend.`, now);
+    const msg = `Pas encore assez d'historique de cours pour la stratégie (${bars.length} bougies sur ${warmup} nécessaires) : le bot attend.`;
+    await repo.insertLog(bot.id, 'warn', symbol, msg, now);
+    think(msg);
     return;
   }
   const series = strategy.compute(bars, bot.params);
@@ -199,15 +210,23 @@ export async function processSymbol(
 
   // Pour un signal qu'on ne suit pas, on ne recopie que l'observation (pas « le bot achète », qui serait faux).
   const observed = lowerFirst(signal.fact ?? signal.reason);
+  const ignore = async (msg: string) => {
+    await repo.insertLog(bot.id, 'signal', symbol, msg, now);
+    think(msg);
+  };
   if (signal.action === 'BUY') {
-    if (position) await repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat ignoré, car le bot possède déjà ${symbol}. Ce qu'il a observé : ${observed}`, now);
-    else if (exitedNow) await repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat ignoré, car ${symbol} vient d'être vendu à l'instant. Ce qu'il a observé : ${observed}`, now);
-    else await buy(repo, bot, state, symbol, price, signal.reason, now);
+    if (position) await ignore(`Signal d'achat ignoré, car le bot possède déjà ${symbol}. Ce qu'il a observé : ${observed}`);
+    else if (exitedNow) await ignore(`Signal d'achat ignoré, car ${symbol} vient d'être vendu à l'instant. Ce qu'il a observé : ${observed}`);
+    else if (await buy(repo, bot, state, symbol, price, signal.reason, now)) think(`Acheté. ${signal.reason}`);
+    else think(`Le bot voulait acheter, mais il n'avait plus assez de liquidités. ${signal.reason}`);
   } else if (signal.action === 'SELL') {
-    if (position) await sell(repo, bot, position, price, 'signal', signal.reason, now);
-    else await repo.insertLog(bot.id, 'signal', symbol, `Signal de vente ignoré, car le bot ne possède pas ${symbol} : il n'y a rien à vendre. Ce qu'il a observé : ${observed}`, now);
+    if (position) {
+      await sell(repo, bot, position, price, 'signal', signal.reason, now);
+      think(`Vendu. ${signal.reason}`);
+    } else await ignore(`Signal de vente ignoré, car le bot ne possède pas ${symbol} : il n'y a rien à vendre. Ce qu'il a observé : ${observed}`);
   } else {
     await repo.insertLog(bot.id, 'info', symbol, `Analyse, aucun ordre : ${signal.reason}`, now);
+    think(signal.reason);
   }
 }
 

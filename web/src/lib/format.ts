@@ -67,3 +67,12 @@ export function pnlClass(n: number | null | undefined): string {
   if (n === null || n === undefined || Math.abs(n) < 1e-9) return 'text-slate-300';
   return n > 0 ? 'text-emerald-400' : 'text-rose-400';
 }
+
+const swissTime = (t: number) => new Date(t).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich' });
+
+/** Horaires d'ouverture d'une bourse, en heure suisse (« de 15:30 à 22:00 »), ou « 24 h/24 » pour les cryptomonnaies. */
+export function fmtSession(session: { start: number; end: number } | null | undefined): string | null {
+  if (!session) return null;
+  if (session.end - session.start >= 23 * 3_600_000) return 'ouverte 24 h/24, 7 jours sur 7';
+  return `ouverte de ${swissTime(session.start)} à ${swissTime(session.end)} (heure suisse), du lundi au vendredi`;
+}

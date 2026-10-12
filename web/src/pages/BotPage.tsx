@@ -34,7 +34,7 @@ import { AllocationBar, COLORS, PerformanceChart, PriceChart, RiskTrack, SERIES,
 import { TradesTable } from '../components/TradesTable.tsx';
 import { Badge, Button, Card, cx, Delta, EmptyState, ErrorBox, LiveDot, Segmented, Spinner, StatTile } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
-import { fmtDate, fmtDateTime, fmtMoney, fmtNum, fmtPct, fmtPrice, fmtQty, fmtRelative, fmtSignedMoney, pnlClass } from '../lib/format.ts';
+import { fmtDate, fmtDateTime, fmtMoney, fmtNum, fmtPct, fmtPrice, fmtQty, fmtRelative, fmtSession, fmtSignedMoney, pnlClass } from '../lib/format.ts';
 import { useNow, usePolling } from '../lib/usePolling.ts';
 
 const INTERVAL_LABEL: Record<string, string> = { '5m': '5 minutes', '15m': '15 minutes', '1h': '1 heure', '1d': '1 jour' };
@@ -141,7 +141,7 @@ export function BotPage() {
 
       {/* Résumé + évolution */}
       <div className="grid grid-cols-1 gap-5 lg:gap-6 xl:grid-cols-5">
-        <Summary bot={bot} summary={summary} positions={positions} className="xl:col-span-2" />
+        <Summary bot={bot} summary={summary} positions={positions} marketOpen={anyOpen} className="xl:col-span-2" />
         <Card className="xl:col-span-3">
           <PerformanceChart points={equity.data ?? []} initialCapital={bot.initialCapital} currency={cur} height={300} title="Évolution de la valeur du bot" />
         </Card>
@@ -165,9 +165,22 @@ export function BotPage() {
         />
         <div className="mt-5 border-t border-line pt-4">
           {positions.length === 0 ? (
-            <EmptyState icon={<Wallet />} title="Le bot ne possède aucune action pour l'instant">
-              Tout l'argent est en liquidités. Le bot achètera dès que sa stratégie le lui dira.
-            </EmptyState>
+            <div className="flex flex-col items-center px-2 py-6 text-center">
+              <div className="mb-3 rounded-xl bg-raised p-3 text-ink-3 [&_svg]:size-5">
+                <Wallet aria-hidden />
+              </div>
+              <p className="text-sm font-semibold text-ink">
+                {summary.tradesCount === 0 ? "Pourquoi le bot n'a encore rien acheté ?" : "Le bot ne possède aucune action pour l'instant"}
+              </p>
+              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-ink-2">
+                {!anyOpen
+                  ? `La bourse est fermée en ce moment${fmtSession(watchlist.find((w) => w.session)?.session) ? ` (elle est ${fmtSession(watchlist.find((w) => w.session)?.session)})` : ''}. Le bot n'achète et ne vend que pendant les heures d'ouverture : il reprendra à la prochaine séance.`
+                  : strategy.idle}
+              </p>
+              <a href="#graphique" className="mt-3 text-sm font-medium text-accent-text hover:underline">
+                Voir ce qu'il pense de chaque action ↓
+              </a>
+            </div>
           ) : (
             <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
               {positions.map((p) => (
@@ -221,12 +234,13 @@ export function BotPage() {
       <section id="graphique" className="scroll-mt-20 space-y-3">
         <div>
           <h2 className="text-base font-semibold text-ink">Les actions que le bot surveille</h2>
-          <p className="mt-0.5 text-xs text-ink-3">Touchez une action pour afficher son graphique.</p>
+          <p className="mt-0.5 text-xs text-ink-3">Pour chacune : son cours et ce que le bot en pense. Touchez une action pour afficher son graphique.</p>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           {watchlist.map((w) => (
             <WatchCard
               key={w.symbol}
+              now={now}
               item={w}
               color={colorOf(w.symbol)}
               held={positions.some((p) => p.symbol === w.symbol)}
@@ -325,7 +339,13 @@ export function BotPage() {
 // Résumé en phrases
 // ---------------------------------------------------------------------------
 
-function Summary({ bot, summary, positions, className }: { bot: Bot; summary: BotSummary; positions: Position[]; className?: string }) {
+function Summary({ bot, summary, positions, marketOpen, className }: {
+  bot: Bot;
+  summary: BotSummary;
+  positions: Position[];
+  marketOpen: boolean;
+  className?: string;
+}) {
   const cur = bot.currency;
   const flat = Math.abs(summary.pnl) < 0.005;
   const vs = summary.benchmarkPnlPct !== null ? summary.pnlPct - summary.benchmarkPnlPct : null;
@@ -372,7 +392,20 @@ function Summary({ bot, summary, positions, className }: { bot: Bot; summary: Bo
               {fmtMoney(summary.cash, cur)} en liquidités.
             </>
           )}{' '}
-          Il a passé {summary.tradesCount} ordre{summary.tradesCount > 1 ? 's' : ''} d'achat ou de vente.
+          {summary.tradesCount === 0 ? (
+            <>
+              Il n'a encore rien acheté :{' '}
+              {bot.status === 'paused'
+                ? 'il est en pause.'
+                : marketOpen
+                  ? "il attend le bon moment selon sa stratégie (voir « Ce qu'il possède » plus bas)."
+                  : 'la bourse est fermée, il attend la prochaine séance.'}
+            </>
+          ) : (
+            <>
+              Il a passé {summary.tradesCount} ordre{summary.tradesCount > 1 ? 's' : ''} d'achat ou de vente.
+            </>
+          )}
         </p>
       </div>
     </Card>
@@ -553,7 +586,15 @@ function Stats({ bot, summary }: { bot: Bot; summary: BotSummary }) {
 // Actions surveillées et graphique
 // ---------------------------------------------------------------------------
 
-function WatchCard({ item, color, held, active, onSelect }: { item: WatchItem; color: string; held: boolean; active: boolean; onSelect: () => void }) {
+function WatchCard({ item, color, held, active, now, onSelect }: {
+  item: WatchItem;
+  color: string;
+  held: boolean;
+  active: boolean;
+  now: number;
+  onSelect: () => void;
+}) {
+  const hours = fmtSession(item.session);
   return (
     <button
       type="button"
@@ -581,6 +622,22 @@ function WatchCard({ item, color, held, active, onSelect }: { item: WatchItem; c
       <div className="mt-3 flex items-end justify-between gap-3">
         <div className="text-lg font-semibold tracking-tight text-ink">{fmtPrice(item.price)}</div>
         <Sparkline values={item.spark} base={item.spark[0]} className="h-9 w-28" />
+      </div>
+      <div className="mt-3 rounded-lg bg-page/60 px-3 py-2.5 text-xs leading-relaxed">
+        <div className="mb-0.5 font-semibold text-ink-2">Ce que le bot en pense</div>
+        {item.marketOpen === false && (
+          <p className="text-ink-2">
+            Bourse fermée{hours ? ` (elle est ${hours})` : ''} : le bot attend la prochaine séance.
+          </p>
+        )}
+        {item.lastAnalysis ? (
+          <p className="mt-0.5 line-clamp-5 text-ink-3">
+            {item.marketOpen === false ? 'Dernière analyse : ' : ''}
+            {item.lastAnalysis.text} <span className="whitespace-nowrap text-ink-3/80">({fmtRelative(item.lastAnalysis.time, now)})</span>
+          </p>
+        ) : (
+          item.marketOpen !== false && <p className="text-ink-3">Le bot donnera son avis à la fin de la prochaine bougie.</p>
+        )}
       </div>
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2.5 text-xs text-ink-3">
         <span className="inline-flex items-center gap-1.5">

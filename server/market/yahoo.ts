@@ -147,6 +147,7 @@ export function parseChart(json: any, now = Date.now()): ChartData {
       priceTime,
       previousClose,
       marketOpen,
+      session: period ? { start: period.start * 1000, end: period.end * 1000 } : null,
     },
     bars,
   };

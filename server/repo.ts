@@ -3,7 +3,7 @@
 //   - db-postgres.ts : base Postgres (hébergement en ligne, ex. Supabase).
 // Le moteur du bot et l'API ne connaissent que cette interface.
 
-import type { Bot, BotConfig, BotStatus, EquityPoint, LogEntry, LogLevel, Side, Trade, TradeTrigger } from '../shared/types.ts';
+import type { Bot, BotConfig, BotStatus, EquityPoint, LogEntry, LogLevel, Session, Side, Trade, TradeTrigger } from '../shared/types.ts';
 
 /** Mémoire interne du bot entre deux analyses. */
 export interface BotState {
@@ -16,6 +16,10 @@ export interface BotState {
   names: Record<string, string>;
   prevClose: Record<string, number>;
   spark: Record<string, number[]>;
+  /** Dernière réflexion du bot par action, affichée sur le dashboard (« ce que le bot en pense »). */
+  lastAnalysis: Record<string, { time: number; text: string }>;
+  /** Horaires d'ouverture de la bourse de chaque action. */
+  session: Record<string, Session>;
 }
 
 export function parseState(raw: unknown): BotState {
@@ -28,6 +32,8 @@ export function parseState(raw: unknown): BotState {
     names: s.names ?? {},
     prevClose: s.prevClose ?? {},
     spark: s.spark ?? {},
+    lastAnalysis: s.lastAnalysis ?? {},
+    session: s.session ?? {},
   };
 }
 

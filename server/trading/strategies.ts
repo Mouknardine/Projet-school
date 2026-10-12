@@ -87,6 +87,7 @@ const smaCross: Strategy = {
       buy: 'Le prix moyen récent passe au-dessus du prix moyen à long terme : la tendance devient haussière.',
       sell: 'Le prix moyen récent repasse sous le prix moyen à long terme : la tendance devient baissière.',
     },
+    idle: "Cette stratégie n'achète qu'au moment précis où le prix moyen récent passe au-dessus du prix moyen à long terme. Si la tendance était déjà haussière au lancement du bot, ce moment est déjà passé : il attend le prochain croisement, ce qui peut prendre plusieurs heures, voire plusieurs jours.",
     params: [
       { key: 'fast', label: 'Moyenne courte', default: 20, min: 2, max: 200, step: 1, help: 'Nombre de bougies du prix moyen récent' },
       { key: 'slow', label: 'Moyenne longue', default: 50, min: 3, max: 400, step: 1, help: 'Nombre de bougies du prix moyen à long terme' },
@@ -133,6 +134,7 @@ const rsiStrategy: Strategy = {
       buy: "Le RSI tombe sous le seuil bas (30 par défaut) : l'action a beaucoup baissé, un rebond est probable.",
       sell: "Le RSI dépasse le seuil haut (70 par défaut) : l'action a beaucoup monté, une rechute est probable.",
     },
+    idle: "Cette stratégie n'achète que lorsqu'une action a fortement baissé (RSI sous le seuil bas). Quand la bourse est calme, aucune action ne baisse assez : le bot peut attendre plusieurs heures, voire plusieurs jours.",
     params: [
       { key: 'period', label: 'Période du RSI', default: 14, min: 2, max: 50, step: 1, help: 'Nombre de bougies prises en compte' },
       { key: 'oversold', label: 'Seuil bas (achat)', default: 30, min: 5, max: 50, step: 1, help: 'Le bot achète si le RSI passe dessous' },
@@ -173,6 +175,7 @@ const macdStrategy: Strategy = {
       buy: "Le MACD passe au-dessus de sa ligne de signal : le prix prend de l'élan à la hausse.",
       sell: "Le MACD passe sous sa ligne de signal : le prix perd son élan et risque de baisser.",
     },
+    idle: "Cette stratégie n'achète qu'au moment précis où le MACD repasse au-dessus de sa ligne de signal, c'est-à-dire quand le prix reprend de l'élan. Il faut parfois attendre plusieurs heures.",
     params: [
       { key: 'fast', label: 'Moyenne rapide', default: 12, min: 2, max: 50, step: 1, help: 'Bougies de la moyenne très récente' },
       { key: 'slow', label: 'Moyenne lente', default: 26, min: 5, max: 100, step: 1, help: 'Bougies de la moyenne plus ancienne' },
@@ -216,6 +219,7 @@ const bollingerStrategy: Strategy = {
       buy: 'Le prix tombe sous la bande basse : il est anormalement bas par rapport à sa moyenne.',
       sell: 'Le prix est remonté jusqu’à sa moyenne : le rebond attendu a eu lieu.',
     },
+    idle: "Cette stratégie n'achète que lorsque le prix tombe anormalement bas (sous la bande basse), ce qui est rare par définition. Le bot peut attendre plusieurs heures, voire plusieurs jours.",
     params: [
       { key: 'period', label: 'Période de la moyenne', default: 20, min: 5, max: 100, step: 1, help: 'Nombre de bougies du prix moyen' },
       { key: 'k', label: "Nombre d'écarts-types", default: 2, min: 0.5, max: 4, step: 0.1 },
@@ -282,6 +286,7 @@ const scoreStrategy: Strategy = {
       buy: 'Le score atteint le seuil d’achat (+2 par défaut) : la majorité des indicateurs sont positifs.',
       sell: 'Le score descend au seuil de vente (−2 par défaut) : la majorité des indicateurs sont négatifs.',
     },
+    idle: "Cette stratégie n'achète qu'au moment où la majorité des indicateurs deviennent positifs en même temps. Il faut parfois attendre plusieurs heures.",
     params: [
       { key: 'fast', label: 'Moyenne courte', default: 20, min: 2, max: 200, step: 1, help: 'Nombre de bougies du prix moyen récent' },
       { key: 'slow', label: 'Moyenne longue', default: 50, min: 3, max: 400, step: 1, help: 'Nombre de bougies du prix moyen à long terme' },
@@ -327,6 +332,7 @@ const buyHold: Strategy = {
     description:
       "Stratégie passive qui sert de point de comparaison (« acheter et garder ») : le bot achète au départ et ne revend jamais. C'est ce que ferait un investisseur qui place son argent et attend. Un algorithme n'a d'intérêt que s'il fait mieux que cette stratégie, à risque égal.",
     rules: { buy: 'Une seule fois, au démarrage du bot.', sell: 'Jamais (sauf vente automatique stop-loss / objectif, si activée).' },
+    idle: "Cette stratégie achète toutes ses actions dès la première analyse faite pendant que la bourse est ouverte.",
     params: [],
   },
   warmup: () => 1,

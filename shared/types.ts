@@ -46,6 +46,8 @@ export interface StrategyInfo {
   short: string;
   description: string;
   rules: { buy: string; sell: string };
+  /** Pourquoi un bot peut rester un moment sans rien acheter avec cette stratégie. */
+  idle: string;
   params: ParamDef[];
 }
 
@@ -152,6 +154,14 @@ export interface BotSummary {
 export interface BotListItem {
   bot: Bot;
   summary: BotSummary;
+  /** La bourse d'au moins une des actions est-elle ouverte ? (null : pas encore observé) */
+  marketOpen: boolean | null;
+}
+
+/** Horaires de la séance de bourse du jour (début et fin, en millisecondes). */
+export interface Session {
+  start: number;
+  end: number;
 }
 
 export interface WatchItem {
@@ -165,6 +175,10 @@ export interface WatchItem {
   dayChangePct: number | null;
   /** Derniers cours de clôture, pour la mini-courbe. */
   spark: number[];
+  /** Dernière réflexion du bot sur cette action (ce qu'il a observé et décidé). */
+  lastAnalysis: { time: number; text: string } | null;
+  /** Horaires d'ouverture de la bourse de cette action. */
+  session: Session | null;
 }
 
 export interface BotDetail {
@@ -184,6 +198,8 @@ export interface Quote {
   priceTime: number;
   previousClose: number | null;
   marketOpen: boolean;
+  /** Horaires de la séance du jour, quand Yahoo Finance les fournit. */
+  session?: Session | null;
 }
 
 export interface SymbolSearchResult {
