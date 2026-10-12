@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "hono": "npm:hono@4.13.9",
+    "hono/cors": "npm:hono@4.13.9/cors",
+    "zod": "npm:zod@4.6.5",
+    "postgres": "npm:postgres@3.4.9"
+  }
+}

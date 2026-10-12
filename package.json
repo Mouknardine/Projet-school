@@ -12,18 +12,20 @@
     "dev:server": "tsx watch --disable-warning=ExperimentalWarning server/index.ts",
     "dev:web": "vite",
     "build": "vite build",
+    "build:vercel": "vite build --mode vercel",
     "start": "tsx --disable-warning=ExperimentalWarning server/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --disable-warning=ExperimentalWarning --test tests/*.test.ts"
   },
   "dependencies": {
-    "express": "^5.1.0",
+    "@hono/node-server": "^1.19.17",
+    "hono": "^4.13.9",
+    "postgres": "^3.4.9",
     "tsx": "^4.20.0",
-    "zod": "^4.1.0"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "~4.1.18",
-    "@types/express": "^5.0.3",
     "@types/node": "^22.18.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

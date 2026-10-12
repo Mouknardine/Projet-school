@@ -7,7 +7,7 @@ import { cx, inputClass } from './ui.tsx';
 
 export const PRESETS: { label: string; hint: string; symbols: string[] }[] = [
   { label: 'Tech US', hint: 'USD', symbols: ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN'] },
-  { label: 'Suisse (SMI)', hint: 'CHF', symbols: ['NESN.SW', 'NOVN.SW', 'ROG.SW', 'UBSG.SW', 'ZURN.SW'] },
+  { label: 'Suisse (SMI)', hint: 'CHF', symbols: ['NESN.SW', 'NOVN.SW', 'ROP.SW', 'UBSG.SW', 'ZURN.SW'] },
   { label: 'Europe', hint: 'EUR', symbols: ['ASML.AS', 'MC.PA', 'SAP.DE', 'SIE.DE', 'AIR.PA'] },
   { label: 'ETF indices US', hint: 'USD', symbols: ['SPY', 'QQQ', 'DIA'] },
   { label: 'Crypto (24h/24)', hint: 'USD', symbols: ['BTC-USD', 'ETH-USD', 'SOL-USD'] },

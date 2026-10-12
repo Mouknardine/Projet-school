@@ -43,9 +43,9 @@ export function BotPage() {
   const now = useNow(5000);
 
   const detail = usePolling(() => api.bot(id), [id], 10_000);
-  const equity = usePolling(() => api.equity(id), [id], 30_000);
+  const equity = usePolling(() => api.equity(id), [id], 60_000);
   const trades = usePolling(() => api.trades(id), [id], 15_000);
-  const logs = usePolling(() => api.logs(id), [id], 10_000);
+  const logs = usePolling(() => api.logs(id), [id], 15_000);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [symbol, setSymbol] = useState<string | null>(null);
@@ -432,7 +432,7 @@ function SymbolChart({ botId, symbols, symbol, onSymbol, tradesVersion }: {
   onSymbol: (s: string) => void;
   tradesVersion: number;
 }) {
-  const chart = usePolling(() => api.chart(botId, symbol), [botId, symbol, tradesVersion], 30_000);
+  const chart = usePolling(() => api.chart(botId, symbol), [botId, symbol, tradesVersion], 60_000);
   const q = chart.data?.quote;
   const change = q && q.previousClose ? (q.price / q.previousClose - 1) * 100 : null;
 

@@ -1,12 +1,12 @@
 // Calcul des chiffres clés affichés sur le dashboard.
 
 import type { Bot, BotSummary, Position } from '../../shared/types.ts';
-import * as repo from '../db.ts';
+import type { Repo } from '../repo.ts';
 import { stopLossPrice, takeProfitPrice } from './portfolio.ts';
 import { downsample, maxDrawdownPct } from './stats.ts';
 
-export function positionsView(bot: Bot): Position[] {
-  return repo.getPositions(bot.id).map((p) => {
+export async function positionsView(repo: Repo, bot: Bot): Promise<Position[]> {
+  return (await repo.getPositions(bot.id)).map((p) => {
     const price = p.lastPrice ?? p.entryPrice;
     const marketValue = p.qty * price;
     const unrealizedPnl = marketValue - p.costBasis;
@@ -21,12 +21,13 @@ export function positionsView(bot: Bot): Position[] {
   });
 }
 
-export function computeSummary(bot: Bot, positions: Position[] = positionsView(bot)): BotSummary {
-  const positionsValue = positions.reduce((a, p) => a + p.marketValue, 0);
+export async function computeSummary(repo: Repo, bot: Bot, positions?: Position[]): Promise<BotSummary> {
+  const pos = positions ?? (await positionsView(repo, bot));
+  const positionsValue = pos.reduce((a, p) => a + p.marketValue, 0);
   const equity = bot.cash + positionsValue;
   const pnl = equity - bot.initialCapital;
-  const totals = repo.tradeTotals(bot.id);
-  const history = repo.listEquity(bot.id);
+  const totals = await repo.tradeTotals(bot.id);
+  const history = await repo.listEquity(bot.id);
   const values = [bot.initialCapital, ...history.map((h) => h.equity), equity];
   const benchmarkEquity = history.length ? history[history.length - 1].benchmark : null;
 
@@ -39,7 +40,7 @@ export function computeSummary(bot: Bot, positions: Position[] = positionsView(b
     benchmarkEquity,
     benchmarkPnlPct: benchmarkEquity !== null ? (benchmarkEquity / bot.initialCapital - 1) * 100 : null,
     realizedPnl: totals.realizedPnl,
-    unrealizedPnl: positions.reduce((a, p) => a + p.unrealizedPnl, 0),
+    unrealizedPnl: pos.reduce((a, p) => a + p.unrealizedPnl, 0),
     feesPaid: totals.fees,
     tradesCount: totals.count,
     closedTrades: totals.closed,

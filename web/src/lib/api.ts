@@ -18,6 +18,12 @@ import type {
 
 const PASSWORD_KEY = 'tradebot.adminPassword';
 
+/**
+ * Adresse du serveur. Vide en local (le serveur de développement relaie /api),
+ * et l'URL des fonctions Supabase une fois en ligne (voir web/.env.production).
+ */
+const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -51,7 +57,7 @@ async function request<T>(method: string, path: string, body?: unknown, retry = 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const pw = sessionPassword ?? getPassword();
   if (pw) headers['x-admin-password'] = pw;
-  const res = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await fetch(`${API_BASE}/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -88,9 +94,9 @@ export const api = {
 
   trades: (id: number) => request<Trade[]>('GET', `/bots/${id}/trades`),
   equity: (id: number) => request<EquityPoint[]>('GET', `/bots/${id}/equity`),
-  logs: (id: number, limit = 150) => request<LogEntry[]>('GET', `/bots/${id}/logs?limit=${limit}`),
+  logs: (id: number, limit = 100) => request<LogEntry[]>('GET', `/bots/${id}/logs?limit=${limit}`),
   chart: (id: number, symbol: string) => request<ChartResponse>('GET', `/bots/${id}/chart?symbol=${encodeURIComponent(symbol)}`),
-  csvUrl: (id: number) => `/api/bots/${id}/trades.csv`,
+  csvUrl: (id: number) => `${API_BASE}/api/bots/${id}/trades.csv`,
 
   backtest: (req: BacktestRequest) => request<BacktestResult>('POST', '/backtest', req),
 };

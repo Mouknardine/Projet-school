@@ -6,8 +6,8 @@
 //   5. enregistre la valeur du portefeuille pour la courbe de performance.
 
 import type { Bot } from '../../shared/types.ts';
-import * as repo from '../db.ts';
 import { closedBars, getChart, rangeFor, type ChartData } from '../market/yahoo.ts';
+import type { BotState, PositionRow, Repo } from '../repo.ts';
 import { computeSell, sizeBuy, stopLossPrice, takeProfitPrice } from './portfolio.ts';
 import { getStrategy } from './strategies.ts';
 
@@ -15,14 +15,14 @@ const money = (n: number, currency: string) => `${n.toFixed(2)} ${currency}`;
 const qtyStr = (q: number) => (Number.isInteger(q) ? String(q) : q.toFixed(4));
 
 /** Valeur totale du portefeuille : liquidités + valeur des positions au dernier cours connu. */
-export function currentEquity(botId: number, cash: number): number {
-  return repo.getPositions(botId).reduce((sum, p) => sum + p.qty * (p.lastPrice ?? p.entryPrice), cash);
+export async function currentEquity(repo: Repo, botId: number, cash: number): Promise<number> {
+  return (await repo.getPositions(botId)).reduce((sum, p) => sum + p.qty * (p.lastPrice ?? p.entryPrice), cash);
 }
 
-function buy(bot: Bot, state: repo.BotState, symbol: string, price: number, reason: string, now: number): boolean {
-  return repo.transaction(() => {
-    const fresh = repo.getBot(bot.id)!;
-    const equity = currentEquity(bot.id, fresh.cash);
+async function buy(repo: Repo, bot: Bot, state: BotState, symbol: string, price: number, reason: string, now: number): Promise<boolean> {
+  return repo.transaction(async (tx) => {
+    const fresh = (await tx.getBot(bot.id))!;
+    const equity = await currentEquity(tx, bot.id, fresh.cash);
     const order = sizeBuy({
       cash: fresh.cash,
       equity,
@@ -32,7 +32,7 @@ function buy(bot: Bot, state: repo.BotState, symbol: string, price: number, reas
       allowFractional: bot.allowFractional,
     });
     if (!order) {
-      repo.insertLog(
+      await tx.insertLog(
         bot.id,
         'warn',
         symbol,
@@ -42,8 +42,8 @@ function buy(bot: Bot, state: repo.BotState, symbol: string, price: number, reas
       return false;
     }
     const cashAfter = fresh.cash - order.total;
-    repo.setCash(bot.id, cashAfter);
-    repo.insertPosition(bot.id, {
+    await tx.setCash(bot.id, cashAfter);
+    await tx.insertPosition(bot.id, {
       symbol,
       qty: order.qty,
       entryPrice: price,
@@ -52,7 +52,7 @@ function buy(bot: Bot, state: repo.BotState, symbol: string, price: number, reas
       lastPrice: price,
       lastPriceAt: now,
     });
-    repo.insertTrade(bot.id, {
+    await tx.insertTrade(bot.id, {
       time: now,
       symbol,
       side: 'BUY',
@@ -66,7 +66,7 @@ function buy(bot: Bot, state: repo.BotState, symbol: string, price: number, reas
       trigger: 'signal',
       cashAfter,
     });
-    repo.insertLog(
+    await tx.insertLog(
       bot.id,
       'trade',
       symbol,
@@ -78,21 +78,22 @@ function buy(bot: Bot, state: repo.BotState, symbol: string, price: number, reas
   });
 }
 
-export function sell(
+export async function sell(
+  repo: Repo,
   bot: Bot,
-  position: repo.PositionRow,
+  position: PositionRow,
   price: number,
   trigger: 'signal' | 'stop_loss' | 'take_profit' | 'manual',
   reason: string,
   now: number,
-): void {
-  repo.transaction(() => {
-    const fresh = repo.getBot(bot.id)!;
+): Promise<void> {
+  await repo.transaction(async (tx) => {
+    const fresh = (await tx.getBot(bot.id))!;
     const r = computeSell(position.qty, price, position.costBasis, bot.feePct);
     const cashAfter = fresh.cash + r.proceeds;
-    repo.setCash(bot.id, cashAfter);
-    repo.deletePosition(bot.id, position.symbol);
-    repo.insertTrade(bot.id, {
+    await tx.setCash(bot.id, cashAfter);
+    await tx.deletePosition(bot.id, position.symbol);
+    await tx.insertTrade(bot.id, {
       time: now,
       symbol: position.symbol,
       side: 'SELL',
@@ -107,7 +108,7 @@ export function sell(
       cashAfter,
     });
     const result = `${r.pnl >= 0 ? 'gain' : 'perte'} de ${money(Math.abs(r.pnl), bot.currency)} (${r.pnlPct >= 0 ? '+' : ''}${r.pnlPct.toFixed(2)} %)`;
-    repo.insertLog(
+    await tx.insertLog(
       bot.id,
       'trade',
       position.symbol,
@@ -121,43 +122,48 @@ export function sell(
  * Traite un symbole à partir des données de marché déjà téléchargées.
  * Séparé du téléchargement pour pouvoir être testé avec des données fixes.
  */
-export function processSymbol(
+export async function processSymbol(
+  repo: Repo,
   bot: Bot,
-  state: repo.BotState,
+  state: BotState,
   symbol: string,
   data: ChartData,
   opts: { now: number; trade: boolean },
-): void {
+): Promise<void> {
   const { quote } = data;
   const { now } = opts;
   const price = quote.price;
-  repo.updatePositionPrice(bot.id, symbol, price, quote.priceTime);
+  await repo.updatePositionPrice(bot.id, symbol, price, quote.priceTime);
   state.lastPrice[symbol] = price;
   if (quote.name) state.names[symbol] = quote.name;
   if (quote.previousClose) state.prevClose[symbol] = quote.previousClose;
   state.spark[symbol] = [...data.bars.slice(-47).map((b) => b.close), price];
 
   if (state.marketOpen[symbol] !== quote.marketOpen) {
-    if (state.marketOpen[symbol] !== undefined || quote.marketOpen) {
-      repo.insertLog(bot.id, 'info', symbol, quote.marketOpen ? `Marché ouvert (${quote.exchange})` : `Marché fermé (${quote.exchange}) — le bot attend la prochaine séance`, now);
-    }
+    await repo.insertLog(
+      bot.id,
+      'info',
+      symbol,
+      quote.marketOpen ? `Marché ouvert (${quote.exchange})` : `Marché fermé (${quote.exchange}) — le bot attend la prochaine séance`,
+      now,
+    );
     state.marketOpen[symbol] = quote.marketOpen;
   }
   // On ne passe des ordres que pendant les heures d'ouverture de la bourse.
   if (!quote.marketOpen || !opts.trade) return;
 
   // 1. Gestion du risque : stop-loss et take-profit, vérifiés à chaque tick avec le dernier cours.
-  let position = repo.getPosition(bot.id, symbol);
+  let position = await repo.getPosition(bot.id, symbol);
   let exitedNow = false;
   if (position) {
     const sl = stopLossPrice(position.entryPrice, bot.stopLossPct);
     const tp = takeProfitPrice(position.entryPrice, bot.takeProfitPct);
     if (sl !== null && price <= sl) {
-      sell(bot, position, price, 'stop_loss', `Stop-loss : cours ${price.toFixed(2)} ≤ ${sl.toFixed(2)} (−${bot.stopLossPct} % sous le prix d'achat)`, now);
+      await sell(repo, bot, position, price, 'stop_loss', `Stop-loss : cours ${price.toFixed(2)} ≤ ${sl.toFixed(2)} (−${bot.stopLossPct} % sous le prix d'achat)`, now);
       position = undefined;
       exitedNow = true;
     } else if (tp !== null && price >= tp) {
-      sell(bot, position, price, 'take_profit', `Take-profit : cours ${price.toFixed(2)} ≥ ${tp.toFixed(2)} (+${bot.takeProfitPct} % au-dessus du prix d'achat)`, now);
+      await sell(repo, bot, position, price, 'take_profit', `Take-profit : cours ${price.toFixed(2)} ≥ ${tp.toFixed(2)} (+${bot.takeProfitPct} % au-dessus du prix d'achat)`, now);
       position = undefined;
       exitedNow = true;
     }
@@ -174,7 +180,7 @@ export function processSymbol(
 
   const warmup = strategy.warmup(bot.params);
   if (bars.length < warmup) {
-    repo.insertLog(bot.id, 'warn', symbol, `Historique insuffisant pour la stratégie (${bars.length}/${warmup} bougies)`, now);
+    await repo.insertLog(bot.id, 'warn', symbol, `Historique insuffisant pour la stratégie (${bars.length}/${warmup} bougies)`, now);
     return;
   }
   const series = strategy.compute(bars, bot.params);
@@ -188,14 +194,14 @@ export function processSymbol(
   });
 
   if (signal.action === 'BUY') {
-    if (position) repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat, mais position déjà ouverte : ${signal.reason}`, now);
-    else if (exitedNow) repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat ignoré (position vendue à l'instant) : ${signal.reason}`, now);
-    else buy(bot, state, symbol, price, signal.reason, now);
+    if (position) await repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat, mais position déjà ouverte : ${signal.reason}`, now);
+    else if (exitedNow) await repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat ignoré (position vendue à l'instant) : ${signal.reason}`, now);
+    else await buy(repo, bot, state, symbol, price, signal.reason, now);
   } else if (signal.action === 'SELL') {
-    if (position) sell(bot, position, price, 'signal', signal.reason, now);
-    else repo.insertLog(bot.id, 'signal', symbol, `Signal de vente, mais aucune position ouverte : ${signal.reason}`, now);
+    if (position) await sell(repo, bot, position, price, 'signal', signal.reason, now);
+    else await repo.insertLog(bot.id, 'signal', symbol, `Signal de vente, mais aucune position ouverte : ${signal.reason}`, now);
   } else {
-    repo.insertLog(bot.id, 'info', symbol, `Analyse : ${signal.reason}`, now);
+    await repo.insertLog(bot.id, 'info', symbol, `Analyse : ${signal.reason}`, now);
   }
 }
 
@@ -212,49 +218,70 @@ export function benchmarkValue(bot: Bot, lastPrices: Record<string, number>): nu
   return total;
 }
 
-const runningTicks = new Set<number>();
 const SNAPSHOT_WHEN_CLOSED_MS = 30 * 60_000;
+const LOCK_TTL_MS = 2 * 60_000;
 
 /** Un cycle complet d'analyse pour un bot. Un bot en pause suit toujours les cours mais ne passe aucun ordre. */
-export async function tickBot(botId: number, opts: { force?: boolean } = {}): Promise<void> {
-  if (runningTicks.has(botId)) return;
-  runningTicks.add(botId);
+export async function tickBot(repo: Repo, botId: number, opts: { force?: boolean } = {}): Promise<void> {
+  // Verrou en base : deux analyses du même bot ne peuvent pas se chevaucher (même sur plusieurs serveurs).
+  if (!(await repo.tryLockBot(botId, Date.now(), LOCK_TTL_MS))) return;
   try {
-    const bot = repo.getBot(botId);
+    const bot = await repo.getBot(botId);
     if (!bot) return;
-    const state = repo.getBotState(botId);
+    const state = await repo.getBotState(botId);
     const strategy = getStrategy(bot.strategy);
     const range = rangeFor(bot.interval, strategy.warmup(bot.params) + 5);
     const errors: string[] = [];
     let anyOpen = false;
 
-    for (const symbol of bot.symbols) {
+    // Les cours de toutes les actions sont téléchargés en parallèle, puis traités un par un.
+    const charts = await Promise.allSettled(bot.symbols.map((s) => getChart(s, bot.interval, range)));
+    for (let i = 0; i < bot.symbols.length; i++) {
+      const symbol = bot.symbols[i];
+      const res = charts[i];
+      if (res.status === 'rejected') {
+        errors.push(`${symbol} : ${res.reason instanceof Error ? res.reason.message : String(res.reason)}`);
+        continue;
+      }
+      anyOpen ||= res.value.quote.marketOpen;
       try {
-        const data = await getChart(symbol, bot.interval, range);
-        anyOpen ||= data.quote.marketOpen;
-        processSymbol(bot, state, symbol, data, { now: Date.now(), trade: bot.status === 'running' });
+        await processSymbol(repo, bot, state, symbol, res.value, { now: Date.now(), trade: bot.status === 'running' });
       } catch (err) {
         errors.push(`${symbol} : ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    repo.saveBotState(botId, state);
+    await repo.saveBotState(botId, state);
 
     const now = Date.now();
     const error = errors.length ? errors.join(' ; ') : null;
-    if (error && error !== bot.lastError) repo.insertLog(botId, 'error', null, `Erreur de données : ${error}`, now);
+    if (error && error !== bot.lastError) await repo.insertLog(botId, 'error', null, `Erreur de données : ${error}`, now);
 
-    const fresh = repo.getBot(botId)!;
-    const last = repo.lastEquity(botId);
+    const fresh = (await repo.getBot(botId))!;
+    const last = await repo.lastEquity(botId);
     if (anyOpen || opts.force || !last || now - last.time >= SNAPSHOT_WHEN_CLOSED_MS) {
-      repo.insertEquity(botId, {
+      await repo.insertEquity(botId, {
         time: now,
-        equity: currentEquity(botId, fresh.cash),
+        equity: await currentEquity(repo, botId, fresh.cash),
         cash: fresh.cash,
         benchmark: benchmarkValue(fresh, state.lastPrice),
       });
     }
-    repo.setBotTick(botId, now, error);
+    await repo.setBotTick(botId, now, error);
   } finally {
-    runningTicks.delete(botId);
+    await repo.unlockBot(botId);
   }
+}
+
+/** Analyse tous les bots, l'un après l'autre. */
+export async function tickAllBots(repo: Repo): Promise<{ bots: number; errors: string[] }> {
+  const bots = await repo.listBots();
+  const errors: string[] = [];
+  for (const bot of bots) {
+    try {
+      await tickBot(repo, bot.id);
+    } catch (err) {
+      errors.push(`#${bot.id} : ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return { bots: bots.length, errors };
 }

@@ -95,10 +95,12 @@ vérifiés avec le plus haut et le plus bas de chaque bougie (si les deux sont t
 ## Architecture
 
 ```
-server/                      Serveur Node.js (TypeScript)
-  index.ts                   point d'entrée : API, dashboard, planificateur
-  api.ts                     routes REST (/api/...)
-  db.ts                      base SQLite : bots, positions, trades, valeur du portefeuille, journal
+server/                      Serveur (TypeScript), fonctionne sous Node.js et sous Deno
+  app.ts                     routes de l'API REST (/api/...), écrites avec Hono
+  index.ts                   point d'entrée local (Node.js) : API + dashboard + planificateur
+  repo.ts                    interface d'accès aux données
+  db-sqlite.ts               base SQLite (par défaut en local)
+  db-postgres.ts             base Postgres (en ligne, ex. Supabase)
   config.ts                  configuration (variables d'environnement)
   market/yahoo.ts            récupération des cours (Yahoo Finance) + cache
   trading/indicators.ts      SMA, EMA, RSI, MACD, Bollinger
@@ -109,11 +111,13 @@ server/                      Serveur Node.js (TypeScript)
   trading/stats.ts           drawdown, volatilité, Sharpe, taux de réussite
   trading/summary.ts         chiffres clés du dashboard
 shared/types.ts              types communs serveur / dashboard
+supabase/                    version en ligne : fonction « api » (Deno), schéma SQL, planificateur
 web/                         Dashboard React (Vite + Tailwind CSS + TradingView Lightweight Charts)
 tests/                       tests automatiques (npm test)
 ```
 
-Les données sont stockées dans un fichier SQLite (`data/tradebot.db`, créé automatiquement).
+En local, les données sont stockées dans un fichier SQLite (`data/tradebot.db`, créé automatiquement).
+En ligne, elles sont dans la base Postgres de Supabase.
 
 ### API
 
@@ -133,8 +137,9 @@ Les données sont stockées dans un fichier SQLite (`data/tradebot.db`, créé a
 | GET | `/api/bots/:id/chart?symbol=` | bougies + indicateurs + trades d'une action |
 | POST | `/api/backtest` | lancer un backtest |
 | GET | `/api/market/search?q=` | rechercher une action |
+| POST | `/api/cron/tick` | analyse de tous les bots (appelée chaque minute par le planificateur en ligne) |
 
-## Configuration
+## Configuration (serveur local)
 
 Copiez `.env.example` en `.env` pour changer :
 
@@ -143,28 +148,61 @@ Copiez `.env.example` en `.env` pour changer :
 | `PORT` | `3001` | port du serveur |
 | `TICK_SECONDS` | `60` | fréquence d'analyse (minimum 15 s) |
 | `ADMIN_PASSWORD` | *(vide)* | si défini, demandé pour créer, modifier ou supprimer un bot ; la consultation reste publique |
-| `DB_PATH` | `data/tradebot.db` | emplacement de la base de données |
+| `DB_PATH` | `data/tradebot.db` | emplacement de la base SQLite |
+| `DATABASE_URL` | *(vide)* | si défini, utilise une base Postgres au lieu de SQLite |
 
-## Mise en ligne
+## Mise en ligne (gratuite) : Supabase + Vercel
 
-Pour que le bot trade en continu et que le dashboard soit accessible depuis n'importe où, il faut un hébergement qui :
+```mermaid
+flowchart LR
+    V[Vercel<br/>page du dashboard] -- requêtes /api --> F[Supabase Edge Function<br/>« api »]
+    C[pg_cron<br/>chaque minute] -- POST /api/cron/tick --> F
+    F --> D[(Postgres<br/>bots, trades, journal)]
+    F --> Y[Yahoo Finance<br/>cours réels]
+```
 
-- fait tourner le serveur **en permanence** (les offres gratuites qui « s'endorment » après quelques minutes sans visite arrêtent le bot) ;
-- offre un **disque persistant** pour le fichier SQLite (sinon l'historique est perdu à chaque redémarrage).
+- **Supabase** (gratuit) héberge le serveur : la base de données Postgres, la fonction `api` (le même code que `server/`,
+  exécuté par Deno) et le planificateur `pg_cron`, qui lance l'analyse de tous les bots chaque minute, 24 h/24.
+- **Vercel** (gratuit) héberge seulement la page du dashboard (fichiers statiques) ; elle appelle l'API de Supabase.
 
-Un `Dockerfile` est fourni ; il fonctionne sur la plupart des hébergeurs (Railway, Fly.io, Render avec disque, un VPS…) :
+### Installation sur un nouveau projet Supabase
+
+1. Créer un projet sur [supabase.com](https://supabase.com) (plan gratuit).
+2. Dans l'éditeur SQL, exécuter `supabase/migrations/20261012120000_tradebot_schema.sql` (tables et extensions).
+3. Déployer la fonction (avec la [CLI Supabase](https://supabase.com/docs/guides/cli)) :
+   `npx supabase functions deploy api --project-ref <PROJECT_REF> --no-verify-jwt`
+4. Exécuter `supabase/setup-cron.sql` en remplaçant `<PROJECT_REF>` et en choisissant le mot de passe administrateur.
+5. Mettre l'adresse de la fonction dans `web/.env.vercel` : `VITE_API_URL=https://<PROJECT_REF>.supabase.co/functions/v1`.
+
+### Publication du dashboard sur Vercel
+
+Sur [vercel.com/new](https://vercel.com/new), importer ce dépôt GitHub et cliquer sur **Deploy** : les réglages sont déjà dans
+`vercel.json` (commande `npm run build:vercel`, dossier `dist/web`). Chaque nouveau commit sur GitHub redéploie automatiquement.
+
+### Mot de passe administrateur
+
+Créer, mettre en pause, réinitialiser ou supprimer un bot demande le mot de passe administrateur (la consultation est publique).
+Il est stocké dans la table `app_settings` de Supabase ; pour le changer, dans l'éditeur SQL :
+`update app_settings set value = 'nouveau-mot-de-passe' where key = 'admin_password';`
+
+> Projets gratuits Supabase : un projet sans aucune activité pendant une semaine peut être mis en pause. Le planificateur et les
+> visites du dashboard génèrent de l'activité ; si le projet est quand même suspendu, il suffit de cliquer sur « Restore » dans
+> le tableau de bord Supabase.
+
+### Autre hébergement (Docker)
+
+Le serveur Node.js complet (API + dashboard + planificateur) peut aussi tourner sur n'importe quel hébergeur qui garde le
+processus allumé en permanence, avec un disque persistant (ou une base Postgres via `DATABASE_URL`) :
 
 ```bash
 docker build -t tradebot .
 docker run -d -p 3001:3001 -v tradebot-data:/data -e ADMIN_PASSWORD=choisissez-un-mot-de-passe tradebot
 ```
 
-Définissez **toujours `ADMIN_PASSWORD`** quand l'application est en ligne, sinon n'importe qui pourrait supprimer vos bots.
-
 ## Tests
 
 ```bash
-npm test          # indicateurs, calcul des ordres, backtest, moteur du bot, lecture des données Yahoo
+npm test          # indicateurs, calcul des ordres, backtest, moteur du bot, base de données, lecture des données Yahoo
 npm run typecheck
 ```
 
