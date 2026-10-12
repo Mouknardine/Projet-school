@@ -7,7 +7,7 @@
 import type { BacktestResult, Bar, BotConfig, EquityPoint, Trade, TradeTrigger } from '../../shared/types.ts';
 import { computeSell, sizeBuy, stopLossPrice, takeProfitPrice } from './portfolio.ts';
 import { closedTradeStats, downsample, maxDrawdownPct, riskMetrics } from './stats.ts';
-import { getStrategy, type Signal } from './strategies.ts';
+import { exitReason, getStrategy, type Signal } from './strategies.ts';
 
 type BacktestConfig = Omit<BotConfig, 'name'>;
 type SimTrade = Omit<Trade, 'id' | 'botId'>;
@@ -109,11 +109,11 @@ export function runBacktest(
         const tp = takeProfitPrice(pos.entryPrice, cfg.takeProfitPct);
         if (sl !== null && bar.low <= sl) {
           const fill = Math.min(bar.open, sl);
-          doSell(s, fill, t, 'stop_loss', `Stop-loss : cours ${fill.toFixed(2)} ≤ ${sl.toFixed(2)} (−${cfg.stopLossPct} %)`);
+          doSell(s, fill, t, 'stop_loss', exitReason('stop_loss', fill, pos.entryPrice, cfg.stopLossPct));
           exited = true;
         } else if (tp !== null && bar.high >= tp) {
           const fill = Math.max(bar.open, tp);
-          doSell(s, fill, t, 'take_profit', `Take-profit : cours ${fill.toFixed(2)} ≥ ${tp.toFixed(2)} (+${cfg.takeProfitPct} %)`);
+          doSell(s, fill, t, 'take_profit', exitReason('take_profit', fill, pos.entryPrice, cfg.takeProfitPct));
           exited = true;
         }
       }
@@ -121,7 +121,7 @@ export function runBacktest(
 
       // c) Signal à la clôture de la bougie → ordre exécuté à la bougie suivante.
       if (i >= warmup - 1) {
-        const sig = strategy.signal({ bars, series: series[s], i, hasPosition: positions.has(s), everHeld: everHeld.has(s), p });
+        const sig = strategy.signal({ bars, series: series[s], i, hasPosition: positions.has(s), everHeld: everHeld.has(s), p, interval: cfg.interval });
         if (sig.action === 'BUY' && !positions.has(s) && !exited) pending.set(s, sig);
         else if (sig.action === 'SELL' && positions.has(s)) pending.set(s, sig);
       }

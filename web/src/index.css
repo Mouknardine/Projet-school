@@ -76,8 +76,44 @@ input[type='number']::-webkit-inner-spin-button {
   animation: fade-up 0.35s ease-out both;
 }
 
+/* Fenêtre de détail : glisse depuis le bas sur mobile, apparaît en fondu sur ordinateur. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-sheet {
+  animation: sheet-up 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+
+/* Espace pour la barre d'onglets du bas (mobile), encoche de l'iPhone comprise. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-up {
+  .animate-fade-up,
+  .animate-sheet,
+  .animate-fade-in {
     animation: none;
   }
 }

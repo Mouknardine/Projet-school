@@ -1,7 +1,8 @@
 // Petits composants d'interface réutilisables.
 
-import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { ArrowDownRight, ArrowUpRight, CircleHelp, Minus, X } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 export function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
@@ -113,23 +114,118 @@ export function LiveDot({ on, className }: { on: boolean | null; className?: str
   );
 }
 
-/** Tuile de chiffre clé : libellé, valeur, détail. */
-export function StatTile({ label, icon, value, sub, valueClassName }: {
+/**
+ * Petit bouton « ? » qui déplie une explication sous le libellé.
+ * Un clic (ou un toucher sur mobile) suffit : pas besoin de survoler, contrairement à une infobulle.
+ */
+export function HelpToggle({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={`${open ? 'Masquer' : 'Afficher'} l'explication : ${label}`}
+      className={cx(
+        '-m-1.5 rounded-full p-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-accent [&_svg]:size-3.5',
+        open ? 'text-accent-text' : 'text-ink-3 hover:text-ink-2',
+      )}
+    >
+      <CircleHelp aria-hidden />
+    </button>
+  );
+}
+
+/** Tuile de chiffre clé : libellé, valeur, détail, et explication facultative dépliable. */
+export function StatTile({ label, icon, value, sub, valueClassName, help }: {
   label: string;
   icon?: ReactNode;
   value: ReactNode;
   sub?: ReactNode;
   valueClassName?: string;
+  /** Explication en langage simple, affichée en touchant le « ? ». */
+  help?: ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="min-w-0 rounded-2xl border border-line bg-surface px-4 py-3.5">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-ink-3 [&_svg]:size-3.5">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-ink-3 [&>svg]:size-3.5">
         {icon}
-        {label}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {help && <HelpToggle label={label} open={open} onToggle={() => setOpen(!open)} />}
       </div>
       <div className={cx('mt-1.5 truncate text-xl font-semibold tracking-tight text-ink', valueClassName)}>{value}</div>
       {sub && <div className="mt-1 line-clamp-2 text-xs leading-snug text-ink-3">{sub}</div>}
+      {help && open && <p className="mt-2 rounded-lg bg-accent/10 px-2.5 py-2 text-xs leading-relaxed text-ink-2">{help}</p>}
     </div>
+  );
+}
+
+/**
+ * Fenêtre de détail : panneau qui glisse depuis le bas sur mobile, boîte centrée sur ordinateur.
+ * Se ferme avec le bouton « Fermer », la touche Échap ou en touchant le fond.
+ */
+export function Sheet({ open, onClose, title, children, resetKey }: {
+  open: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  children: ReactNode;
+  /** Quand cette valeur change (nouveau contenu), la fenêtre revient en haut. */
+  resetKey?: unknown;
+}) {
+  const titleId = useId();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [resetKey]);
+  // Gardé dans une référence : le tableau de bord se rafraîchit souvent, et l'effet ci-dessous
+  // ne doit pas se relancer (ni redonner le focus au bouton) à chaque rafraîchissement.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+      previous?.focus();
+    };
+  }, [open]);
+
+  if (!open) return null;
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div className="animate-fade-in absolute inset-0 bg-black/70" onClick={onClose} aria-hidden />
+      <div className="animate-sheet relative flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-line-strong bg-surface shadow-2xl sm:max-w-xl sm:rounded-3xl">
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-line-strong sm:hidden" aria-hidden />
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-5 py-3">
+          <h2 id={titleId} className="min-w-0 truncate text-base font-semibold text-ink">
+            {title}
+          </h2>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-raised px-3 text-sm font-medium text-ink-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent [&_svg]:size-4"
+          >
+            <X aria-hidden /> Fermer
+          </button>
+        </header>
+        <div ref={bodyRef} className="overflow-y-auto overscroll-contain px-5 pt-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

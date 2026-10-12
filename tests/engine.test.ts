@@ -52,7 +52,7 @@ describe('moteur du bot en direct', () => {
     const trades = await repo.listTrades(bot.id);
     assert.equal(trades.length, 1);
     assert.equal(trades[0].side, 'BUY');
-    assert.match(trades[0].reason, /Croisement haussier/);
+    assert.match(trades[0].reason, /La tendance devient haussière/);
     assert.equal(trades[0].qty, 47); // 5000 / (106 × 1.001) = 47.1
     const pos = await repo.getPosition(bot.id, 'TEST');
     assert.ok(pos);

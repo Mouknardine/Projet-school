@@ -1,6 +1,6 @@
 import { BookOpen, FlaskConical, LayoutDashboard, Plus } from 'lucide-react';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router';
+import { BrowserRouter, Link, NavLink, Route, Routes, useLocation } from 'react-router';
 import type { AppConfig, StrategyInfo } from '../../shared/types.ts';
 import { cx, Delta, ErrorBox, LiveDot, Spinner } from './components/ui.tsx';
 import { api } from './lib/api.ts';
@@ -34,22 +34,24 @@ function Logo() {
   );
 }
 
+/** Les menus, avec un libellé court (barre du bas sur mobile) et un libellé complet (barre latérale). */
 const NAV = [
-  { to: '/', label: 'Mes bots', icon: LayoutDashboard, end: true },
-  { to: '/backtest', label: 'Backtest', icon: FlaskConical, end: false },
-  { to: '/apprendre', label: 'Comment ça marche', icon: BookOpen, end: false },
+  { to: '/', short: 'Mes bots', label: 'Mes bots', icon: LayoutDashboard, end: true },
+  { to: '/bots/new', short: 'Nouveau bot', label: 'Créer un bot', icon: Plus, end: true },
+  { to: '/backtest', short: 'Tester', label: 'Tester sur le passé', icon: FlaskConical, end: false },
+  { to: '/apprendre', short: 'Comprendre', label: 'Comment ça marche', icon: BookOpen, end: false },
 ];
+
+/** Les pages d'un bot font partie de l'onglet « Mes bots ». */
+function isBotsTab(pathname: string) {
+  return pathname === '/' || (pathname.startsWith('/bots/') && pathname !== '/bots/new');
+}
 
 function SidebarBots() {
   const { data } = usePolling(() => api.bots(), [], 20_000);
   return (
     <div className="mt-6">
-      <div className="mb-2 flex items-center justify-between px-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Bots</span>
-        <Link to="/bots/new" className="rounded-md p-1 text-ink-3 hover:bg-raised hover:text-ink" aria-label="Nouveau bot">
-          <Plus className="size-4" />
-        </Link>
-      </div>
+      <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">Mes bots en cours</div>
       <ul className="space-y-0.5">
         {(data ?? []).map(({ bot, summary }) => (
           <li key={bot.id}>
@@ -72,6 +74,7 @@ function SidebarBots() {
 }
 
 function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
+  const { pathname } = useLocation();
   const link = ({ isActive }: { isActive: boolean }) =>
     cx(
       'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors [&_svg]:size-4',
@@ -88,9 +91,9 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
             <span className="block text-[11px] text-ink-3">Trading algorithmique · TIP</span>
           </span>
         </Link>
-        <nav className="mt-7 space-y-0.5">
+        <nav className="mt-7 space-y-0.5" aria-label="Menu principal">
           {NAV.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} className={link}>
+            <NavLink key={to} to={to} end={end} className={(p) => link({ isActive: to === '/' ? isBotsTab(pathname) : p.isActive })}>
               <Icon aria-hidden />
               {label}
             </NavLink>
@@ -99,37 +102,63 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
         {ready && <SidebarBots />}
         <div className="mt-auto rounded-xl border border-line bg-page/60 p-3 text-xs leading-relaxed text-ink-3">
           <div className="mb-1 flex items-center gap-1.5 font-semibold text-ink-2">
-            <span className="size-1.5 rounded-full bg-warn" /> Paper trading
+            <span className="size-1.5 rounded-full bg-warn" /> Simulation : argent fictif
           </div>
-          Cours réels (Yahoo Finance), argent fictif. Aucun ordre n'est passé sur un vrai marché.
+          Les cours de bourse sont réels (Yahoo Finance), mais l'argent est fictif : aucun ordre n'est passé sur un vrai marché.
         </div>
       </aside>
 
-      {/* Barre du haut (mobile / tablette) */}
+      {/* Barre du haut (mobile / tablette) : le nom de l'app et le rappel qu'il s'agit d'une simulation. */}
       <header className="sticky top-0 z-30 border-b border-line bg-page/90 backdrop-blur lg:hidden">
-        <div className="flex items-center gap-3 px-4 py-3">
+        <div className="flex items-center gap-2.5 px-4 py-2.5">
           <Link to="/" className="flex items-center gap-2">
             <Logo />
-            <span className="font-bold tracking-tight text-ink">TradeBot</span>
+            <span>
+              <span className="block text-[15px] font-bold leading-tight tracking-tight text-ink">TradeBot</span>
+              <span className="block text-[11px] leading-tight text-ink-3">Robots de trading · projet TIP</span>
+            </span>
           </Link>
-          <nav className="ml-auto flex gap-1">
-            {NAV.map(({ to, label, icon: Icon, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                aria-label={label}
-                className={({ isActive }) => cx('rounded-lg p-2 [&_svg]:size-5', isActive ? 'bg-raised text-ink' : 'text-ink-3')}
-              >
-                <Icon aria-hidden />
-              </NavLink>
-            ))}
-          </nav>
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-warn/30 bg-warn/10 px-2.5 py-1 text-[11px] font-medium text-warn">
+            <span className="size-1.5 rounded-full bg-warn" aria-hidden /> Argent fictif
+          </span>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
-      <footer className="mx-auto max-w-[1400px] px-4 pb-8 text-xs text-ink-3 sm:px-6 lg:px-8">
+      {/* Barre d'onglets du bas (mobile / tablette) : chaque menu a une icône ET un nom. */}
+      <nav aria-label="Menu principal" className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
+        <ul className="mx-auto grid max-w-xl grid-cols-4">
+          {NAV.map(({ to, short, icon: Icon, end }) => (
+            <li key={to}>
+              <NavLink
+                to={to}
+                end={end}
+                className={({ isActive }) => {
+                  const active = to === '/' ? isBotsTab(pathname) : isActive;
+                  return cx(
+                    'flex flex-col items-center gap-1 px-1 pt-2 pb-2 text-[11px] font-medium leading-none transition-colors [&_svg]:size-[22px]',
+                    active ? 'text-accent-text' : 'text-ink-3 hover:text-ink-2',
+                  );
+                }}
+              >
+                {({ isActive }) => {
+                  const active = to === '/' ? isBotsTab(pathname) : isActive;
+                  return (
+                    <>
+                      <span className={cx('flex h-7 w-12 items-center justify-center rounded-full transition-colors', active && 'bg-accent/15')}>
+                        <Icon aria-hidden strokeWidth={active ? 2.4 : 2} />
+                      </span>
+                      <span className="whitespace-nowrap">{short}</span>
+                    </>
+                  );
+                }}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <main className="mx-auto max-w-[1400px] px-4 pt-5 pb-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+      <footer className="mx-auto max-w-[1400px] px-4 pb-28 text-xs text-ink-3 sm:px-6 lg:px-8 lg:pb-8">
         Projet scolaire (TIP) — simulation de trading algorithmique. Données : Yahoo Finance (peuvent être différées). Graphiques en chandeliers :{' '}
         <a href="https://www.tradingview.com/" className="underline hover:text-ink-2" target="_blank" rel="noreferrer">
           TradingView Lightweight Charts

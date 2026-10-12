@@ -9,10 +9,11 @@ import type { Bot } from '../../shared/types.ts';
 import { closedBars, getChart, rangeFor, type ChartData } from '../market/yahoo.ts';
 import type { BotState, PositionRow, Repo } from '../repo.ts';
 import { computeSell, sizeBuy, stopLossPrice, takeProfitPrice } from './portfolio.ts';
-import { getStrategy } from './strategies.ts';
+import { exitReason, getStrategy } from './strategies.ts';
 
 const money = (n: number, currency: string) => `${n.toFixed(2)} ${currency}`;
 const qtyStr = (q: number) => (Number.isInteger(q) ? String(q) : q.toFixed(4));
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 /** Valeur totale du portefeuille : liquidités + valeur des positions au dernier cours connu. */
 export async function currentEquity(repo: Repo, botId: number, cash: number): Promise<number> {
@@ -36,7 +37,7 @@ async function buy(repo: Repo, bot: Bot, state: BotState, symbol: string, price:
         bot.id,
         'warn',
         symbol,
-        `Signal d'achat non exécuté : liquidités insuffisantes (${money(fresh.cash, bot.currency)} disponibles, cours ${money(price, bot.currency)}). ${reason}`,
+        `Le bot voulait acheter, mais il n'a plus assez de liquidités (${money(fresh.cash, bot.currency)} disponibles pour un cours de ${money(price, bot.currency)}). Raison du signal : ${reason}`,
         now,
       );
       return false;
@@ -70,7 +71,7 @@ async function buy(repo: Repo, bot: Bot, state: BotState, symbol: string, price:
       bot.id,
       'trade',
       symbol,
-      `ACHAT de ${qtyStr(order.qty)} ${symbol} à ${money(price, bot.currency)} (total ${money(order.total, bot.currency)}, frais ${money(order.fees, bot.currency)}) — ${reason}`,
+      `ACHAT de ${qtyStr(order.qty)} ${symbol} à ${money(price, bot.currency)} (total ${money(order.total, bot.currency)}, dont ${money(order.fees, bot.currency)} de frais). Pourquoi : ${reason}`,
       now,
     );
     state.everHeld[symbol] = true;
@@ -112,7 +113,7 @@ export async function sell(
       bot.id,
       'trade',
       position.symbol,
-      `VENTE de ${qtyStr(position.qty)} ${position.symbol} à ${money(price, bot.currency)} : ${result} — ${reason}`,
+      `VENTE de ${qtyStr(position.qty)} ${position.symbol} à ${money(price, bot.currency)} : ${result}, frais compris. Pourquoi : ${reason}`,
       now,
     );
   });
@@ -144,7 +145,9 @@ export async function processSymbol(
       bot.id,
       'info',
       symbol,
-      quote.marketOpen ? `Marché ouvert (${quote.exchange})` : `Marché fermé (${quote.exchange}) — le bot attend la prochaine séance`,
+      quote.marketOpen
+        ? `Bourse ouverte (${quote.exchange}) : le bot peut acheter et vendre ${symbol}.`
+        : `Bourse fermée (${quote.exchange}) : le bot attend la prochaine séance pour acheter ou vendre ${symbol}.`,
       now,
     );
     state.marketOpen[symbol] = quote.marketOpen;
@@ -159,11 +162,11 @@ export async function processSymbol(
     const sl = stopLossPrice(position.entryPrice, bot.stopLossPct);
     const tp = takeProfitPrice(position.entryPrice, bot.takeProfitPct);
     if (sl !== null && price <= sl) {
-      await sell(repo, bot, position, price, 'stop_loss', `Stop-loss : cours ${price.toFixed(2)} ≤ ${sl.toFixed(2)} (−${bot.stopLossPct} % sous le prix d'achat)`, now);
+      await sell(repo, bot, position, price, 'stop_loss', exitReason('stop_loss', price, position.entryPrice, bot.stopLossPct), now);
       position = undefined;
       exitedNow = true;
     } else if (tp !== null && price >= tp) {
-      await sell(repo, bot, position, price, 'take_profit', `Take-profit : cours ${price.toFixed(2)} ≥ ${tp.toFixed(2)} (+${bot.takeProfitPct} % au-dessus du prix d'achat)`, now);
+      await sell(repo, bot, position, price, 'take_profit', exitReason('take_profit', price, position.entryPrice, bot.takeProfitPct), now);
       position = undefined;
       exitedNow = true;
     }
@@ -180,7 +183,7 @@ export async function processSymbol(
 
   const warmup = strategy.warmup(bot.params);
   if (bars.length < warmup) {
-    await repo.insertLog(bot.id, 'warn', symbol, `Historique insuffisant pour la stratégie (${bars.length}/${warmup} bougies)`, now);
+    await repo.insertLog(bot.id, 'warn', symbol, `Pas encore assez d'historique de cours pour la stratégie (${bars.length} bougies sur ${warmup} nécessaires) : le bot attend.`, now);
     return;
   }
   const series = strategy.compute(bars, bot.params);
@@ -191,17 +194,20 @@ export async function processSymbol(
     hasPosition: !!position,
     everHeld: !!state.everHeld[symbol],
     p: bot.params,
+    interval: bot.interval,
   });
 
+  // Pour un signal qu'on ne suit pas, on ne recopie que l'observation (pas « le bot achète », qui serait faux).
+  const observed = lowerFirst(signal.fact ?? signal.reason);
   if (signal.action === 'BUY') {
-    if (position) await repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat, mais position déjà ouverte : ${signal.reason}`, now);
-    else if (exitedNow) await repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat ignoré (position vendue à l'instant) : ${signal.reason}`, now);
+    if (position) await repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat ignoré, car le bot possède déjà ${symbol}. Ce qu'il a observé : ${observed}`, now);
+    else if (exitedNow) await repo.insertLog(bot.id, 'signal', symbol, `Signal d'achat ignoré, car ${symbol} vient d'être vendu à l'instant. Ce qu'il a observé : ${observed}`, now);
     else await buy(repo, bot, state, symbol, price, signal.reason, now);
   } else if (signal.action === 'SELL') {
     if (position) await sell(repo, bot, position, price, 'signal', signal.reason, now);
-    else await repo.insertLog(bot.id, 'signal', symbol, `Signal de vente, mais aucune position ouverte : ${signal.reason}`, now);
+    else await repo.insertLog(bot.id, 'signal', symbol, `Signal de vente ignoré, car le bot ne possède pas ${symbol} : il n'y a rien à vendre. Ce qu'il a observé : ${observed}`, now);
   } else {
-    await repo.insertLog(bot.id, 'info', symbol, `Analyse : ${signal.reason}`, now);
+    await repo.insertLog(bot.id, 'info', symbol, `Analyse, aucun ordre : ${signal.reason}`, now);
   }
 }
 
@@ -254,7 +260,7 @@ export async function tickBot(repo: Repo, botId: number, opts: { force?: boolean
 
     const now = Date.now();
     const error = errors.length ? errors.join(' ; ') : null;
-    if (error && error !== bot.lastError) await repo.insertLog(botId, 'error', null, `Erreur de données : ${error}`, now);
+    if (error && error !== bot.lastError) await repo.insertLog(botId, 'error', null, `Impossible de récupérer certains cours : ${error}`, now);
 
     const fresh = (await repo.getBot(botId))!;
     const last = await repo.lastEquity(botId);

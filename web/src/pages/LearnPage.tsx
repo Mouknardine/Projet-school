@@ -5,12 +5,28 @@ import { useAppData } from '../App.tsx';
 import { Card } from '../components/ui.tsx';
 
 const STEPS: { title: string; text: string }[] = [
-  { title: '1. Données', text: 'Le bot télécharge les cours réels (bougies : ouverture, haut, bas, clôture) depuis Yahoo Finance.' },
-  { title: '2. Indicateurs', text: 'Il calcule des indicateurs mathématiques : moyennes mobiles, RSI, MACD, écart-type…' },
-  { title: '3. Signal', text: 'La stratégie compare ces indicateurs à des règles et produit un signal : ACHAT, VENTE ou ATTENTE.' },
-  { title: '4. Risque', text: 'Taille de la position, liquidités disponibles, stop-loss et take-profit sont vérifiés.' },
-  { title: '5. Exécution', text: "L'ordre est simulé au cours actuel, frais de courtage inclus. Aucun argent réel n'est engagé." },
-  { title: '6. Suivi', text: 'Chaque trade est enregistré avec sa justification ; la performance est comparée au Buy & Hold.' },
+  { title: '1. Il lit les cours', text: 'Le bot télécharge les vrais cours de la bourse depuis Yahoo Finance, résumés en « bougies » (prix d’ouverture, plus haut, plus bas, clôture).' },
+  { title: '2. Il calcule', text: 'Il calcule des indicateurs mathématiques à partir de ces prix : moyennes, RSI, MACD, écart-type…' },
+  { title: '3. Il décide', text: 'Sa stratégie compare ces indicateurs à des règles précises et donne un signal : ACHETER, VENDRE ou ATTENDRE.' },
+  { title: '4. Il vérifie', text: 'Il applique ses règles de prudence : part maximale par achat, liquidités disponibles, stop-loss et objectif.' },
+  { title: '5. Il passe l’ordre', text: "L'achat ou la vente est simulé au cours actuel, frais compris. Aucun argent réel n'est engagé." },
+  { title: '6. Il explique', text: 'Chaque trade est enregistré avec sa raison, et le résultat est comparé à « acheter et garder ».' },
+];
+
+/** Les mots qu'on croise dans l'application, expliqués en une phrase. */
+const GLOSSARY: { term: string; text: string }[] = [
+  { term: 'Action', text: "Une petite part d'une entreprise (Apple, Nestlé…), qu'on peut acheter et revendre en bourse." },
+  { term: 'Cours', text: "Le prix actuel d'une action. Il change à chaque instant pendant que la bourse est ouverte." },
+  { term: 'Bougie', text: 'Le résumé des prix sur une durée (5 min, 1 h, 1 jour…) : prix au début, à la fin, le plus haut et le plus bas.' },
+  { term: 'Trade (ordre)', text: 'Un achat ou une vente passé par le bot.' },
+  { term: 'Liquidités', text: "L'argent du bot qui n'est pas investi en actions." },
+  { term: 'Stop-loss', text: 'Vente automatique quand une action a trop baissé, pour limiter la perte.' },
+  { term: 'Objectif (take-profit)', text: 'Vente automatique quand une action a assez monté, pour encaisser le gain.' },
+  { term: 'Acheter et garder (Buy & Hold)', text: 'Acheter les actions au départ et ne plus y toucher. Sert de point de comparaison pour les bots.' },
+  { term: 'Pire chute (drawdown)', text: 'La plus forte baisse de valeur depuis un sommet : elle mesure le risque.' },
+  { term: 'Backtest', text: "Tester une stratégie sur les cours du passé pour voir ce qu'elle aurait donné." },
+  { term: 'Paper trading', text: 'Trader avec de l’argent fictif sur les vrais cours, comme dans cette application.' },
+  { term: 'Indicateur', text: "Un calcul fait à partir des prix (moyenne, RSI, MACD…) qui aide la stratégie à décider." },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -42,7 +58,32 @@ export function LearnPage() {
         </p>
       </div>
 
-      <Card title={`La boucle de décision (répétée toutes les ${config.tickSeconds} secondes)`}>
+      <Card title="À quoi sert cette application ?">
+        <div className="space-y-3 text-[15px] leading-relaxed text-ink-2">
+          <p>
+            TradeBot fait tourner des <b className="font-semibold text-ink">robots de trading</b> : des programmes qui achètent et vendent des actions tout seuls, en
+            suivant des règles mathématiques. Ils utilisent les <b className="font-semibold text-ink">vrais cours de la bourse</b>, mais de l'
+            <b className="font-semibold text-ink">argent fictif</b> : personne ne peut rien perdre.
+          </p>
+          <p>
+            La question à laquelle l'application répond : <b className="font-semibold text-ink">un algorithme fait-il mieux qu'un investisseur qui achète des actions et attend ?</b>{' '}
+            Pour le savoir, chaque bot est comparé à la stratégie « acheter et garder », et chacune de ses décisions est expliquée en français.
+          </p>
+        </div>
+      </Card>
+
+      <Card title="Les mots à connaître">
+        <dl className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          {GLOSSARY.map((g) => (
+            <div key={g.term} className="rounded-lg bg-page/60 px-3 py-2.5">
+              <dt className="font-semibold text-ink">{g.term}</dt>
+              <dd className="mt-0.5 leading-snug text-ink-3">{g.text}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+
+      <Card title={`Ce que fait le bot, toutes les ${config.tickSeconds} secondes`}>
         <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {STEPS.map((s, i) => (
             <li key={s.title} className="relative rounded-lg border border-line bg-page/60 p-3">
@@ -95,9 +136,9 @@ export function LearnPage() {
 
       <Section title="Gestion du risque">
         <div className="grid gap-3 md:grid-cols-2">
-          <Term name="Taille de position">Part du portefeuille investie à chaque achat (ex. 20 %). Elle évite de tout miser sur une seule action.</Term>
+          <Term name="Part investie par achat (taille de position)">Part du portefeuille investie à chaque achat (ex. 20 %). Elle évite de tout miser sur une seule action.</Term>
           <Term name="Stop-loss">Vente automatique si le cours baisse d'un certain pourcentage sous le prix d'achat : on limite la perte.</Term>
-          <Term name="Take-profit">Vente automatique quand le gain atteint l'objectif fixé : on sécurise le bénéfice.</Term>
+          <Term name="Objectif (take-profit)">Vente automatique quand le gain atteint l'objectif fixé : on sécurise le bénéfice.</Term>
           <Term name="Frais de courtage">Chaque ordre coûte un pourcentage du montant. Un bot qui trade beaucoup paie beaucoup de frais.</Term>
         </div>
       </Section>
@@ -105,10 +146,10 @@ export function LearnPage() {
       <Section title="Mesurer la performance">
         <div className="grid gap-3 md:grid-cols-2">
           <Term name="Rendement">(Valeur finale − capital initial) / capital initial.</Term>
-          <Term name="Buy & Hold (référence)">
+          <Term name="Acheter et garder (Buy & Hold)">
             Ce qu'aurait rapporté l'achat des mêmes actions, à parts égales, au lancement du bot. Un algorithme n'est utile que s'il fait mieux, à risque égal.
           </Term>
-          <Term name="Drawdown maximal">La plus forte baisse entre un sommet et le creux suivant : la pire perte qu'un investisseur aurait subie.</Term>
+          <Term name="Pire chute (drawdown maximal)">La plus forte baisse entre un sommet et le creux suivant : la pire perte qu'un investisseur aurait subie.</Term>
           <Term name="Ratio de Sharpe">
             Rendement moyen / écart-type des rendements, annualisé (×√nombre de périodes par an). Au-dessus de 1, le rendement compense bien le risque.
           </Term>

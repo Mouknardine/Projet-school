@@ -37,14 +37,16 @@ export function NewBotPage() {
   return (
     <form onSubmit={submit} className="mx-auto max-w-4xl space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Nouveau bot</h1>
-        <p className="mt-1 text-sm text-ink-3">
-          Le bot démarre immédiatement. Il suit les cours réels et passe des ordres fictifs pendant les heures d'ouverture de la bourse.
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Créer un bot</h1>
+        <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
+          Répondez aux 5 questions ci-dessous. Le bot démarre tout de suite : il suit les vrais cours et achète ou vend avec de l'argent fictif, pendant les heures
+          d'ouverture de la bourse.
         </p>
+        <p className="mt-1.5 text-sm text-ink-3">Pas sûr de votre stratégie ? Testez-la d'abord sur le passé avec l'onglet « Tester ».</p>
       </div>
 
       <Card>
-        <Field label="Nom du bot">
+        <Field label="Nom du bot" hint="Pour le reconnaître dans la liste, par exemple « Tech US – RSI ».">
           <input className={inputClass} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
         </Field>
       </Card>
@@ -52,7 +54,7 @@ export function NewBotPage() {
       <ConfigForm value={value} onChange={setValue} strategies={strategies} intervals={config.intervals} />
 
       {error && <ErrorBox>{error}</ErrorBox>}
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
           Annuler
         </Button>

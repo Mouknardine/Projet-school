@@ -295,7 +295,7 @@ export function createApi(deps: AppDeps): Hono {
     if (!position) throw new HttpError(404, 'Aucune position ouverte sur ce titre');
     const quote = await getQuote(symbol);
     if (!quote.marketOpen) throw new HttpError(409, 'Le marché est fermé : impossible de vendre maintenant.');
-    await sell(repo, bot, position, quote.price, 'manual', 'Vente manuelle depuis le dashboard', Date.now());
+    await sell(repo, bot, position, quote.price, 'manual', "Vente demandée à la main depuis le dashboard : ce n'est pas une décision du bot.", Date.now());
     return c.json(await botDetail(bot.id));
   });
 

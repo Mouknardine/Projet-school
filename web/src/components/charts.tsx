@@ -92,9 +92,9 @@ export interface RangeOption {
 }
 
 export const LIVE_RANGES: RangeOption[] = [
-  { id: '1d', label: '1J', ms: 86_400_000 },
-  { id: '1w', label: '1S', ms: 7 * 86_400_000 },
-  { id: '1m', label: '1M', ms: 30 * 86_400_000 },
+  { id: '1d', label: '1 jour', ms: 86_400_000 },
+  { id: '1w', label: '1 semaine', ms: 7 * 86_400_000 },
+  { id: '1m', label: '1 mois', ms: 30 * 86_400_000 },
   { id: 'all', label: 'Tout', ms: null },
 ];
 
@@ -235,7 +235,7 @@ export function PerformanceChart({ points, initialCapital, currency, title = 'Va
             <span>{active ? (hover !== null ? fmtFull(active.time) : 'maintenant') : ''}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">{active ? fmtMoney(active.equity, currency) : '–'}</span>
+            <span className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">{active ? fmtMoney(active.equity, currency) : '–'}</span>
             <Delta value={pnlPct} size="md" />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-3">
@@ -248,15 +248,15 @@ export function PerformanceChart({ points, initialCapital, currency, title = 'Va
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-0.5 w-3 rounded-full" style={{ background: COLORS.bench }} />
-              Buy & Hold <span className="text-ink-2">{active?.benchmark != null ? fmtMoney(active.benchmark, currency) : '–'}</span>
+              Acheter et garder <span className="text-ink-2">{active?.benchmark != null ? fmtMoney(active.benchmark, currency) : '–'}</span>
               <span>({fmtPct(benchPct)})</span>
             </span>
             <span>
-              Drawdown <span className={activeDd < -0.005 ? 'text-down' : 'text-ink-2'}>{fmtNum(activeDd ?? 0)} %</span>
+              Chute depuis le sommet <span className={activeDd < -0.005 ? 'text-down' : 'text-ink-2'}>{fmtNum(activeDd ?? 0)} %</span>
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {ranges.length > 1 && <Segmented value={rangeId} onChange={setRangeId} items={ranges.map((r) => ({ id: r.id, label: r.label }))} />}
           <button
             type="button"
@@ -267,7 +267,7 @@ export function PerformanceChart({ points, initialCapital, currency, title = 'Va
             )}
             aria-pressed={showTable}
           >
-            <Table2 aria-hidden /> Données
+            <Table2 aria-hidden /> Voir en tableau
           </button>
         </div>
       </div>
@@ -279,13 +279,13 @@ export function PerformanceChart({ points, initialCapital, currency, title = 'Va
       ) : showTable ? (
         <div className="relative max-h-[320px] overflow-auto rounded-xl border border-line">
           <table className="num w-full text-sm">
-            <caption className="sr-only">Valeur du portefeuille, Buy & Hold et drawdown</caption>
+            <caption className="sr-only">Valeur du bot, « acheter et garder » et chute depuis le sommet</caption>
             <thead className="sticky top-0 bg-raised text-left text-xs text-ink-3">
               <tr>
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 text-right font-medium">Bot</th>
-                <th className="px-3 py-2 text-right font-medium">Buy & Hold</th>
-                <th className="px-3 py-2 text-right font-medium">Drawdown</th>
+                <th className="px-3 py-2 text-right font-medium">Acheter et garder</th>
+                <th className="px-3 py-2 text-right font-medium">Chute depuis le sommet</th>
               </tr>
             </thead>
             <tbody>
@@ -309,7 +309,7 @@ export function PerformanceChart({ points, initialCapital, currency, title = 'Va
             viewBox={`0 0 ${w} ${h}`}
             className="block w-full touch-pan-y select-none outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-md"
             role="img"
-            aria-label={`${title} : ${fmtMoney(view[n - 1].equity, currency)}, ${fmtPct(pnlPct)} depuis le départ. Drawdown maximal ${fmtNum(maxDd)} %. Flèches gauche/droite pour parcourir.`}
+            aria-label={`${title} : ${fmtMoney(view[n - 1].equity, currency)}, ${fmtPct(pnlPct)} depuis le départ. Pire chute ${fmtNum(maxDd)} %. Flèches gauche/droite pour parcourir.`}
             tabIndex={0}
             onKeyDown={onKey}
             onBlur={() => setHover(null)}
@@ -355,7 +355,7 @@ export function PerformanceChart({ points, initialCapital, currency, title = 'Va
             <line x1={x0} x2={x1} y1={ddTop} y2={ddTop} stroke={COLORS.line} shapeRendering="crispEdges" />
             <path d={`${ddLine}L${x(n - 1)},${ddTop}L${x(0)},${ddTop}Z`} fill={`url(#${uid}-dd)`} stroke={COLORS.down} strokeOpacity={0.8} strokeWidth={1.25} />
             <text x={x0 + 2} y={ddTop - 5} fontSize={10} fontWeight={600} fill={COLORS.ink3} letterSpacing="0.06em">
-              DRAWDOWN
+              CHUTE DEPUIS LE SOMMET
             </text>
             <text x={x1 + 10} y={ddTop + ddH} dominantBaseline="middle" fontSize={10.5} fill={COLORS.ink3} className="num">
               {fmtNum(maxDd, 1)} %
@@ -396,16 +396,16 @@ export function PerformanceChart({ points, initialCapital, currency, title = 'Va
             >
               <div className="mb-1.5 text-ink-3">{fmtFull(view[hover].time)}</div>
               <TooltipRow color={COLORS.accent} label="Bot" value={fmtMoney(view[hover].equity, currency)} />
-              {view[hover].benchmark != null && <TooltipRow color={COLORS.bench} label="Buy & Hold" value={fmtMoney(view[hover].benchmark as number, currency)} />}
-              <TooltipRow color={COLORS.down} label="Drawdown" value={`${fmtNum(drawdowns[hover])} %`} />
+              {view[hover].benchmark != null && <TooltipRow color={COLORS.bench} label="Acheter et garder" value={fmtMoney(view[hover].benchmark as number, currency)} />}
+              <TooltipRow color={COLORS.down} label="Chute depuis le sommet" value={`${fmtNum(drawdowns[hover])} %`} />
             </div>
           )}
         </div>
       )}
 
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-3">
-        <LegendKey color={COLORS.accent} label="Bot (valeur du portefeuille)" />
-        <LegendKey color={COLORS.bench} label="Buy & Hold : mêmes actions achetées au départ, à parts égales" />
+        <LegendKey color={COLORS.accent} label="Le bot (sa valeur totale)" />
+        <LegendKey color={COLORS.bench} label="Acheter et garder : les mêmes actions achetées au départ, à parts égales, jamais revendues" />
       </div>
     </div>
   );
@@ -491,13 +491,13 @@ export function AllocationBar({ items, currency }: { items: AllocationItem[]; cu
 // Jauge stop-loss → objectif : où se situe le cours actuel ?
 // ---------------------------------------------------------------------------
 
-export function RiskTrack({ stop, target, entry, price }: { stop: number | null; target: number | null; entry: number; price: number }) {
+export function RiskTrack({ stop, target, entry, price, className = 'w-36' }: { stop: number | null; target: number | null; entry: number; price: number; className?: string }) {
   const lo = stop ?? Math.min(entry, price) * 0.97;
   const hi = target ?? Math.max(entry, price) * 1.03;
   const pos = (v: number) => `${Math.max(0, Math.min(100, ((v - lo) / (hi - lo || 1)) * 100))}%`;
   const up = price >= entry;
   return (
-    <div className="w-36" title={`Stop ${stop ? stop.toFixed(2) : '—'} · achat ${entry.toFixed(2)} · cours ${price.toFixed(2)} · objectif ${target ? target.toFixed(2) : '—'}`}>
+    <div className={className} title={`Stop ${stop ? stop.toFixed(2) : '—'} · achat ${entry.toFixed(2)} · cours ${price.toFixed(2)} · objectif ${target ? target.toFixed(2) : '—'}`}>
       <div className="relative h-1.5 rounded-full bg-line">
         <div className="absolute inset-y-0 left-0 rounded-l-full bg-down/40" style={{ width: pos(entry) }} />
         <div className="absolute inset-y-0 right-0 rounded-r-full bg-up/40" style={{ left: pos(entry) }} />
@@ -508,8 +508,8 @@ export function RiskTrack({ stop, target, entry, price }: { stop: number | null;
         />
       </div>
       <div className="num mt-1.5 flex justify-between text-[10.5px] text-ink-3">
-        <span>{stop ? fmtNum(stop) : 'sans stop'}</span>
-        <span>{target ? fmtNum(target) : 'sans objectif'}</span>
+        <span>{stop ? `stop-loss ${fmtNum(stop)}` : 'pas de stop-loss'}</span>
+        <span>{target ? `objectif ${fmtNum(target)}` : "pas d'objectif"}</span>
       </div>
     </div>
   );
@@ -623,8 +623,17 @@ function barTimeFor(bars: Bar[], t: number): number | null {
   return found >= 0 ? bars[found].time : null;
 }
 
-function markerFor(trade: TradeMark, barTime: number): SeriesMarker<Time> {
-  const label = trade.trigger === 'stop_loss' ? 'Stop' : trade.trigger === 'take_profit' ? 'Objectif' : trade.side === 'BUY' ? 'Achat' : 'Vente';
+function markerFor(trade: TradeMark, barTime: number, withText: boolean): SeriesMarker<Time> {
+  // Sur un petit écran, les mots se chevauchent : on garde seulement les flèches (expliquées dans la légende).
+  const label = !withText
+    ? ''
+    : trade.trigger === 'stop_loss'
+      ? 'Stop-loss'
+      : trade.trigger === 'take_profit'
+        ? 'Objectif'
+        : trade.side === 'BUY'
+          ? 'Achat'
+          : 'Vente';
   return trade.side === 'BUY'
     ? { time: toSec(barTime), position: 'belowBar', shape: 'arrowUp', color: COLORS.up, text: label }
     : { time: toSec(barTime), position: 'aboveBar', shape: 'arrowDown', color: COLORS.down, text: label };
@@ -665,7 +674,7 @@ export function PriceChart({ bars, overlays, series, trades, interval, height = 
       .map((t) => ({ t, barTime: barTimeFor(bars, t.time) }))
       .filter((m): m is { t: TradeMark; barTime: number } => m.barTime !== null)
       .sort((a, b) => a.barTime - b.barTime)
-      .map((m) => markerFor(m.t, m.barTime));
+      .map((m) => markerFor(m.t, m.barTime, (container.current?.clientWidth ?? 0) >= 640));
     c.markers.setMarkers(marks);
 
     if (!c.fitted && bars.length > 0) {
