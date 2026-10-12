@@ -175,7 +175,7 @@ export function BotPage() {
               <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-ink-2">
                 {!anyOpen
                   ? `La bourse est fermée en ce moment${fmtSession(watchlist.find((w) => w.session)?.session) ? ` (elle est ${fmtSession(watchlist.find((w) => w.session)?.session)})` : ''}. Le bot n'achète et ne vend que pendant les heures d'ouverture : il reprendra à la prochaine séance.`
-                  : strategy.idle}
+                  : strategy.idle || "Sa stratégie n'a pas encore donné de signal d'achat : le bot attend le bon moment."}
               </p>
               <a href="#graphique" className="mt-3 text-sm font-medium text-accent-text hover:underline">
                 Voir ce qu'il pense de chaque action ↓

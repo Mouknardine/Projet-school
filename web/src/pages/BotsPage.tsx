@@ -119,11 +119,14 @@ export function BotsPage() {
           {data.map(({ bot, summary, marketOpen }) => {
             const vsBench = summary.benchmarkPnlPct !== null ? summary.pnlPct - summary.benchmarkPnlPct : null;
             const running = bot.status === 'running';
+            // marketOpen vaut null (ou manque) tant que le bot n'a pas encore observé sa bourse.
             const status = !running
               ? { tone: 'warn' as const, label: 'En pause' }
-              : marketOpen
-                ? { tone: 'up' as const, label: 'Actif · bourse ouverte' }
-                : { tone: 'neutral' as const, label: 'Actif · bourse fermée' };
+              : marketOpen == null
+                ? { tone: 'up' as const, label: 'Actif' }
+                : marketOpen
+                  ? { tone: 'up' as const, label: 'Actif · bourse ouverte' }
+                  : { tone: 'neutral' as const, label: 'Actif · bourse fermée' };
             return (
               <Link
                 key={bot.id}
