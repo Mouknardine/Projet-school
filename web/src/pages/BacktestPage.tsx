@@ -4,10 +4,10 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import type { BacktestResult } from '../../../shared/types.ts';
 import { useAppData } from '../App.tsx';
-import { EquityChart, PriceChart } from '../components/charts.tsx';
+import { PerformanceChart, PriceChart, SERIES } from '../components/charts.tsx';
 import { ConfigForm, DEFAULT_CONFIG, validateConfig, type ConfigValue } from '../components/ConfigForm.tsx';
 import { TradesTable } from '../components/TradesTable.tsx';
-import { Button, Card, cx, ErrorBox, InfoBox, Kpi, Tabs } from '../components/ui.tsx';
+import { Button, Card, cx, ErrorBox, InfoBox, StatTile as Kpi, Tabs } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
 import { fmtDate, fmtMoney, fmtNum, fmtPct, fmtPrice, fmtQty, pnlClass } from '../lib/format.ts';
 
@@ -42,8 +42,8 @@ export function BacktestPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">Backtest d'une stratégie</h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-400">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Backtest d'une stratégie</h1>
+        <p className="mt-1 max-w-3xl text-sm text-ink-3">
           Le backtest rejoue la stratégie sur l'historique réel des cours, comme si le bot avait tourné pendant cette période. C'est la méthode utilisée
           par les professionnels pour évaluer un algorithme avant de lui confier de l'argent.
         </p>
@@ -57,9 +57,9 @@ export function BacktestPage() {
           intervals={config.intervals}
           intervalExtra={
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm font-medium text-slate-200">Période testée :</span>
+              <span className="text-sm font-medium text-ink-2">Période testée :</span>
               <Tabs value={effectiveRange} onChange={setRange} items={ranges.map((r) => ({ id: r.id, label: r.label }))} />
-              {value.interval !== '1d' && <span className="text-xs text-slate-500">Yahoo Finance limite l'historique des bougies intraday.</span>}
+              {value.interval !== '1d' && <span className="text-xs text-ink0">Yahoo Finance limite l'historique des bougies intraday.</span>}
             </div>
           }
         />
@@ -88,8 +88,8 @@ function Results({ result, config, onLaunch }: { result: BacktestResult; config:
     <div id="resultats" className="scroll-mt-20 space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-white">Résultats</h2>
-          <p className="text-sm text-slate-400">
+          <h2 className="text-xl font-semibold text-ink">Résultats</h2>
+          <p className="text-sm text-ink-3">
             Du {fmtDate(stats.startTime)} au {fmtDate(stats.endTime)} · bougies de {result.interval} · les {result.warmupBars} premières bougies servent à
             calculer les indicateurs
           </p>
@@ -125,7 +125,7 @@ function Results({ result, config, onLaunch }: { result: BacktestResult; config:
         <Kpi
           label="Drawdown max"
           value={`−${fmtNum(stats.maxDrawdownPct)} %`}
-          valueClassName="text-rose-300"
+          valueClassName="text-down"
           sub={`Buy & Hold : −${fmtNum(stats.benchmarkMaxDrawdownPct)} %`}
         />
         <Kpi
@@ -142,7 +142,7 @@ function Results({ result, config, onLaunch }: { result: BacktestResult; config:
           label="Gain / perte moyen"
           value={
             <span>
-              <span className="text-emerald-400">{fmtPct(stats.avgWinPct, 1)}</span> / <span className="text-rose-400">{fmtPct(stats.avgLossPct, 1)}</span>
+              <span className="text-up">{fmtPct(stats.avgWinPct, 1)}</span> / <span className="text-down">{fmtPct(stats.avgLossPct, 1)}</span>
             </span>
           }
           sub={`Profit factor : ${stats.profitFactor === null ? '–' : fmtNum(stats.profitFactor)}`}
@@ -151,8 +151,8 @@ function Results({ result, config, onLaunch }: { result: BacktestResult; config:
         <Kpi label="Temps investi" value={`${fmtNum(stats.exposurePct, 0)} %`} sub="du temps avec au moins une position" />
       </div>
 
-      <Card title="Valeur du portefeuille : stratégie vs Buy & Hold">
-        <EquityChart points={result.equity} initialCapital={config.initialCapital} currency={currency} intraday={result.interval !== '1d'} height={320} />
+      <Card>
+        <PerformanceChart points={result.equity} initialCapital={config.initialCapital} currency={currency} title="Valeur du portefeuille simulé" ranges={[]} height={320} />
       </Card>
 
       <Card title="Cours, indicateurs et ordres simulés" actions={<Tabs value={current} onChange={setSymbol} items={symbols.map((s) => ({ id: s, label: s }))} />}>
@@ -175,8 +175,8 @@ function Results({ result, config, onLaunch }: { result: BacktestResult; config:
             {result.openPositions.map((p) => {
               const pct = (p.lastPrice / p.entryPrice - 1) * 100;
               return (
-                <div key={p.symbol} className="num rounded-lg bg-slate-950/60 px-3 py-2 text-sm">
-                  <span className="font-semibold text-slate-100">{p.symbol}</span> · {fmtQty(p.qty)} × {fmtPrice(p.lastPrice)}{' '}
+                <div key={p.symbol} className="num rounded-lg bg-page/60 px-3 py-2 text-sm">
+                  <span className="font-semibold text-ink">{p.symbol}</span> · {fmtQty(p.qty)} × {fmtPrice(p.lastPrice)}{' '}
                   <span className={cx('text-xs', pnlClass(pct))}>({fmtPct(pct)})</span>
                 </div>
               );
@@ -186,7 +186,7 @@ function Results({ result, config, onLaunch }: { result: BacktestResult; config:
       )}
 
       <Card title={`Trades simulés (${result.trades.length})`}>
-        <TradesTable trades={[...result.trades].reverse()} currency={currency} />
+        <TradesTable trades={[...result.trades].reverse()} currency={currency} colorOf={(s) => SERIES[Math.max(0, symbols.indexOf(s)) % SERIES.length]} />
       </Card>
     </div>
   );

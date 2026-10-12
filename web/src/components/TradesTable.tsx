@@ -1,34 +1,57 @@
 // Historique des trades : chaque ordre passé par le bot, avec sa justification.
 
+import { ArrowDownRight, ArrowUpRight, Hand, ShieldAlert, Target, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Trade, TradeTrigger } from '../../../shared/types.ts';
-import { fmtDate, fmtMoney, fmtPct, fmtPrice, fmtQty, fmtSignedMoney, pnlClass } from '../lib/format.ts';
-import { Badge, cx } from './ui.tsx';
+import { fmtDate, fmtMoney, fmtPrice, fmtQty, fmtSignedMoney, pnlClass } from '../lib/format.ts';
+import { cx, Delta, EmptyState, Segmented } from './ui.tsx';
 
 type Row = Omit<Trade, 'id' | 'botId'> & { id?: number };
 
-const TRIGGERS: Record<TradeTrigger, { label: string; tone: 'sky' | 'red' | 'green' | 'violet' }> = {
-  signal: { label: 'Signal', tone: 'sky' },
-  stop_loss: { label: 'Stop-loss', tone: 'red' },
-  take_profit: { label: 'Take-profit', tone: 'green' },
-  manual: { label: 'Manuel', tone: 'violet' },
+const TRIGGERS: Record<TradeTrigger, { label: string; icon: typeof Zap }> = {
+  signal: { label: 'Signal', icon: Zap },
+  stop_loss: { label: 'Stop-loss', icon: ShieldAlert },
+  take_profit: { label: 'Objectif', icon: Target },
+  manual: { label: 'Manuel', icon: Hand },
 };
 
-export function TradesTable({ trades, currency, pageSize = 25 }: { trades: Row[]; currency: string; pageSize?: number }) {
+const selectClass = 'h-[30px] rounded-lg border border-line bg-page px-2 text-xs text-ink-2 outline-none focus:border-accent';
+
+export function TradesTable({ trades, currency, pageSize = 25, colorOf }: {
+  trades: Row[];
+  currency: string;
+  pageSize?: number;
+  colorOf?: (symbol: string) => string;
+}) {
   const [symbol, setSymbol] = useState('');
-  const [side, setSide] = useState<'' | 'BUY' | 'SELL'>('');
+  const [side, setSide] = useState<'all' | 'BUY' | 'SELL'>('all');
   const [limit, setLimit] = useState(pageSize);
   const symbols = useMemo(() => [...new Set(trades.map((t) => t.symbol))].sort(), [trades]);
-  const filtered = trades.filter((t) => (!symbol || t.symbol === symbol) && (!side || t.side === side));
+  const filtered = trades.filter((t) => (!symbol || t.symbol === symbol) && (side === 'all' || t.side === side));
+  const sells = trades.filter((t) => t.side === 'SELL' && t.pnl !== null);
+  const wins = sells.filter((t) => (t.pnl as number) > 0).length;
 
   if (trades.length === 0) {
-    return <p className="py-6 text-center text-sm text-slate-400">Aucun trade pour l'instant. Le bot attend un signal de sa stratégie.</p>;
+    return (
+      <EmptyState icon={<Zap />} title="Aucun trade pour l'instant">
+        Le bot attend un signal de sa stratégie. Chaque ordre apparaîtra ici avec la raison de la décision.
+      </EmptyState>
+    );
   }
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <select className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs" value={symbol} onChange={(e) => setSymbol(e.target.value)}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Segmented
+          value={side}
+          onChange={setSide}
+          items={[
+            { id: 'all', label: 'Tous' },
+            { id: 'BUY', label: 'Achats' },
+            { id: 'SELL', label: 'Ventes' },
+          ]}
+        />
+        <select className={selectClass} value={symbol} onChange={(e) => setSymbol(e.target.value)} aria-label="Filtrer par action">
           <option value="">Toutes les actions</option>
           {symbols.map((s) => (
             <option key={s} value={s}>
@@ -36,65 +59,83 @@ export function TradesTable({ trades, currency, pageSize = 25 }: { trades: Row[]
             </option>
           ))}
         </select>
-        <select className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs" value={side} onChange={(e) => setSide(e.target.value as '' | 'BUY' | 'SELL')}>
-          <option value="">Achats et ventes</option>
-          <option value="BUY">Achats</option>
-          <option value="SELL">Ventes</option>
-        </select>
-        <span className="self-center text-xs text-slate-500">{filtered.length} trade(s)</span>
+        <span className="ml-auto text-xs text-ink-3">
+          {sells.length > 0 && (
+            <>
+              <span className="text-up">{wins} gagnante(s)</span> · <span className="text-down">{sells.length - wins} perdante(s)</span> ·{' '}
+            </>
+          )}
+          {filtered.length} ordre(s)
+        </span>
       </div>
-      <div className="-mx-4 overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
+      <div className="relative -mx-5 overflow-x-auto">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
-            <tr className="border-b border-slate-800 text-left text-xs uppercase tracking-wide text-slate-400">
-              <th className="px-4 py-2 font-medium">Date</th>
-              <th className="px-2 py-2 font-medium">Action</th>
-              <th className="px-2 py-2 font-medium">Ordre</th>
-              <th className="px-2 py-2 text-right font-medium">Quantité</th>
-              <th className="px-2 py-2 text-right font-medium">Prix</th>
-              <th className="px-2 py-2 text-right font-medium">Montant (frais)</th>
-              <th className="px-2 py-2 text-right font-medium">Résultat</th>
-              <th className="px-4 py-2 font-medium">Raison</th>
+            <tr className="border-y border-line text-left text-xs text-ink-3">
+              <th className="px-5 py-2.5 font-medium">Date</th>
+              <th className="px-3 py-2.5 font-medium">Ordre</th>
+              <th className="px-3 py-2.5 text-right font-medium">Quantité × prix</th>
+              <th className="px-3 py-2.5 text-right font-medium">Montant</th>
+              <th className="px-3 py-2.5 text-right font-medium">Résultat</th>
+              <th className="px-5 py-2.5 font-medium">Raison de la décision</th>
             </tr>
           </thead>
           <tbody className="num">
-            {filtered.slice(0, limit).map((t, i) => (
-              <tr key={t.id ?? `${t.time}-${t.symbol}-${i}`} className="border-b border-slate-800/60 align-top hover:bg-slate-800/30">
-                <td className="whitespace-nowrap px-4 py-2 text-slate-300">
-                  {fmtDate(t.time)}
-                  <div className="text-xs text-slate-500">{new Date(t.time).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}</div>
-                </td>
-                <td className="px-2 py-2 font-semibold text-slate-100">{t.symbol}</td>
-                <td className="px-2 py-2">
-                  <div className="flex flex-col items-start gap-1">
-                    <Badge tone={t.side === 'BUY' ? 'green' : 'red'}>{t.side === 'BUY' ? 'ACHAT' : 'VENTE'}</Badge>
-                    {t.trigger !== 'signal' && <Badge tone={TRIGGERS[t.trigger].tone}>{TRIGGERS[t.trigger].label}</Badge>}
-                  </div>
-                </td>
-                <td className="px-2 py-2 text-right">{fmtQty(t.qty)}</td>
-                <td className="px-2 py-2 text-right">{fmtPrice(t.price)}</td>
-                <td className="whitespace-nowrap px-2 py-2 text-right">
-                  {fmtMoney(t.amount, currency)}
-                  <div className="text-xs text-slate-500">{fmtMoney(t.fees, currency)}</div>
-                </td>
-                <td className={cx('whitespace-nowrap px-2 py-2 text-right font-medium', pnlClass(t.pnl))}>
-                  {t.pnl === null ? (
-                    <span className="text-slate-500">—</span>
-                  ) : (
-                    <>
-                      {fmtSignedMoney(t.pnl, currency)}
-                      <div className="text-xs font-normal">{fmtPct(t.pnlPct)}</div>
-                    </>
-                  )}
-                </td>
-                <td className="min-w-[220px] max-w-md px-4 py-2 text-xs leading-relaxed text-slate-400">{t.reason}</td>
-              </tr>
-            ))}
+            {filtered.slice(0, limit).map((t, i) => {
+              const trig = TRIGGERS[t.trigger];
+              const TrigIcon = trig.icon;
+              const buy = t.side === 'BUY';
+              return (
+                <tr key={t.id ?? `${t.time}-${t.symbol}-${i}`} className="border-b border-line/70 align-top transition-colors last:border-0 hover:bg-raised/40">
+                  <td className="whitespace-nowrap px-5 py-3 text-ink-2">
+                    {fmtDate(t.time)}
+                    <div className="text-xs text-ink-3">{new Date(t.time).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}</div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cx('flex size-7 items-center justify-center rounded-lg [&_svg]:size-4', buy ? 'bg-up/12 text-up' : 'bg-down/12 text-down')}
+                        aria-hidden
+                      >
+                        {buy ? <ArrowUpRight /> : <ArrowDownRight />}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-1.5 font-semibold text-ink">
+                          {colorOf && <span className="size-1.5 rounded-full" style={{ background: colorOf(t.symbol) }} />}
+                          {buy ? 'Achat' : 'Vente'} {t.symbol}
+                        </div>
+                        <div className="mt-0.5 inline-flex items-center gap-1 text-xs text-ink-3 [&_svg]:size-3">
+                          <TrigIcon aria-hidden /> {trig.label}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right text-ink-2">
+                    {fmtQty(t.qty)} × {fmtPrice(t.price)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right">
+                    <div className="text-ink">{fmtMoney(t.amount, currency)}</div>
+                    <div className="text-xs text-ink-3">frais {fmtMoney(t.fees, currency)}</div>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right">
+                    {t.pnl === null ? (
+                      <span className="text-ink-3">—</span>
+                    ) : (
+                      <>
+                        <div className={cx('font-medium', pnlClass(t.pnl))}>{fmtSignedMoney(t.pnl, currency)}</div>
+                        <Delta value={t.pnlPct} className="mt-0.5" />
+                      </>
+                    )}
+                  </td>
+                  <td className="min-w-[240px] max-w-md px-5 py-3 text-xs leading-relaxed text-ink-2">{t.reason}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
       {filtered.length > limit && (
-        <button type="button" onClick={() => setLimit(limit + pageSize * 2)} className="mt-3 text-xs text-emerald-400 hover:underline">
+        <button type="button" onClick={() => setLimit(limit + pageSize * 2)} className="mt-3 text-xs font-medium text-accent-text hover:underline">
           Afficher plus ({filtered.length - limit} restants)
         </button>
       )}

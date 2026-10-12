@@ -120,6 +120,10 @@ export interface BotState {
   everHeld: Record<string, boolean>;
   marketOpen: Record<string, boolean>;
   lastPrice: Record<string, number>;
+  /** Informations d'affichage : nom, clôture de la veille et derniers cours (mini-courbe). */
+  names: Record<string, string>;
+  prevClose: Record<string, number>;
+  spark: Record<string, number[]>;
 }
 
 type Row = Record<string, any>;
@@ -187,7 +191,15 @@ export function insertBot(cfg: BotConfig, currency: string, startPrices: Record<
 export function getBotState(id: number): BotState {
   const row = db.prepare('SELECT state FROM bots WHERE id = ?').get(id) as Row | undefined;
   const s = row ? JSON.parse(row.state) : {};
-  return { lastBar: s.lastBar ?? {}, everHeld: s.everHeld ?? {}, marketOpen: s.marketOpen ?? {}, lastPrice: s.lastPrice ?? {} };
+  return {
+    lastBar: s.lastBar ?? {},
+    everHeld: s.everHeld ?? {},
+    marketOpen: s.marketOpen ?? {},
+    lastPrice: s.lastPrice ?? {},
+    names: s.names ?? {},
+    prevClose: s.prevClose ?? {},
+    spark: s.spark ?? {},
+  };
 }
 
 export function saveBotState(id: number, state: BotState): void {

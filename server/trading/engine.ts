@@ -133,6 +133,9 @@ export function processSymbol(
   const price = quote.price;
   repo.updatePositionPrice(bot.id, symbol, price, quote.priceTime);
   state.lastPrice[symbol] = price;
+  if (quote.name) state.names[symbol] = quote.name;
+  if (quote.previousClose) state.prevClose[symbol] = quote.previousClose;
+  state.spark[symbol] = [...data.bars.slice(-47).map((b) => b.close), price];
 
   if (state.marketOpen[symbol] !== quote.marketOpen) {
     if (state.marketOpen[symbol] !== undefined || quote.marketOpen) {

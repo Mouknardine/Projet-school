@@ -1,7 +1,38 @@
 @import 'tailwindcss';
 
+/*
+ * Thème sombre de l'application (inspiré de Kraken Pro / Fey).
+ * Couleurs vérifiées : contraste du texte ≥ 4.5:1 sur les surfaces, palette des séries validée
+ * pour les daltonismes (script de validation du guide dataviz).
+ */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-page: #0b0b0c;
+  --color-surface: #141416;
+  --color-raised: #1c1c1f;
+  --color-line: #26262a;
+  --color-line-strong: #34343a;
+
+  --color-ink: #f0efec;
+  --color-ink-2: #c3c2b7;
+  --color-ink-3: #898781;
+
+  --color-accent: #3987e5;
+  --color-accent-text: #6aa8f0;
+  --color-up: #2ebd85;
+  --color-down: #f6465d;
+  --color-warn: #fab219;
+
+  /* Séries (ordre fixe, jamais recyclé) */
+  --color-s1: #3987e5;
+  --color-s2: #d95926;
+  --color-s3: #199e70;
+  --color-s4: #c98500;
+  --color-s5: #d55181;
+  --color-s6: #008300;
+  --color-s7: #9085e9;
+  --color-s8: #e66767;
 }
 
 html {
@@ -9,13 +40,44 @@ html {
 }
 
 body {
-  @apply bg-slate-950 text-slate-200 antialiased;
+  @apply bg-page text-ink antialiased;
 }
 
+/* Chiffres alignés dans les colonnes de tableaux uniquement. */
 .num {
   font-variant-numeric: tabular-nums;
 }
 
+::selection {
+  background: rgb(57 135 229 / 0.35);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #34343a transparent;
+}
+
 input[type='number']::-webkit-inner-spin-button {
   opacity: 0.4;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up {
+    animation: none;
+  }
 }

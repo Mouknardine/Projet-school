@@ -131,11 +131,15 @@ function botDetail(id: number): BotDetail {
   const watchlist = bot.symbols.map((symbol) => {
     const price = state.lastPrice[symbol] ?? null;
     const start = bot.startPrices[symbol];
+    const prev = state.prevClose[symbol];
     return {
       symbol,
+      name: state.names[symbol] ?? null,
       price,
       marketOpen: state.marketOpen[symbol] ?? null,
       sinceStartPct: price !== null && start ? (price / start - 1) * 100 : null,
+      dayChangePct: price !== null && prev ? (price / prev - 1) * 100 : null,
+      spark: state.spark[symbol] ?? [],
     };
   });
   return { bot, summary: computeSummary(bot, positions), positions, strategy: getStrategy(bot.strategy).info, watchlist };

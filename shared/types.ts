@@ -156,10 +156,15 @@ export interface BotListItem {
 
 export interface WatchItem {
   symbol: string;
+  name: string | null;
   price: number | null;
   marketOpen: boolean | null;
   /** Variation du cours depuis le lancement du bot (en %). */
   sinceStartPct: number | null;
+  /** Variation du jour (par rapport à la clôture de la veille, en %). */
+  dayChangePct: number | null;
+  /** Derniers cours de clôture, pour la mini-courbe. */
+  spark: number[];
 }
 
 export interface BotDetail {

@@ -43,7 +43,7 @@ function NumberInput({ value, onChange, min, max, step, suffix }: { value: numbe
         step={step}
         onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))}
       />
-      {suffix && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400">{suffix}</span>}
+      {suffix && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-ink-3">{suffix}</span>}
     </div>
   );
 }
@@ -76,7 +76,7 @@ export function ConfigForm({ value, onChange, strategies, intervals, intervalExt
                 onClick={() => set('initialCapital', n)}
                 className={cx(
                   'num rounded-md px-2.5 py-1.5 text-xs ring-1',
-                  value.initialCapital === n ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40' : 'text-slate-300 ring-slate-700 hover:bg-slate-800',
+                  value.initialCapital === n ? 'bg-accent/15 text-accent-text ring-accent/40' : 'text-ink-2 ring-line hover:bg-raised',
                 )}
               >
                 {n.toLocaleString('fr-CH')}
@@ -88,7 +88,7 @@ export function ConfigForm({ value, onChange, strategies, intervals, intervalExt
 
       <Card title="2. Actions suivies">
         <SymbolPicker value={value.symbols} onChange={(s) => set('symbols', s)} />
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-3 text-xs text-ink-3">
           Toutes les actions d'un bot doivent être cotées dans la même devise. Les symboles suisses se terminent par <code>.SW</code>.
         </p>
       </Card>
@@ -102,24 +102,24 @@ export function ConfigForm({ value, onChange, strategies, intervals, intervalExt
               onClick={() => onChange({ ...value, strategy: s.id, params: defaultParams(s) })}
               className={cx(
                 'rounded-lg border px-3 py-2.5 text-left transition-colors',
-                s.id === value.strategy ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-slate-700 hover:border-slate-500 hover:bg-slate-800/50',
+                s.id === value.strategy ? 'border-accent/60 bg-accent/10' : 'border-line hover:border-line-strong hover:bg-raised/60',
               )}
             >
-              <div className="text-sm font-semibold text-slate-100">{s.name}</div>
-              <div className="mt-0.5 line-clamp-2 text-xs text-slate-400">{s.rules.buy}</div>
+              <div className="text-sm font-semibold text-ink">{s.name}</div>
+              <div className="mt-0.5 line-clamp-2 text-xs text-ink-3">{s.rules.buy}</div>
             </button>
           ))}
         </div>
 
         {strategy && (
-          <div className="mt-4 space-y-4 rounded-lg bg-slate-950/50 p-4">
-            <p className="text-sm leading-relaxed text-slate-300">{strategy.description}</p>
+          <div className="mt-4 space-y-4 rounded-lg bg-page/60 p-4">
+            <p className="text-sm leading-relaxed text-ink-2">{strategy.description}</p>
             <div className="grid gap-2 text-sm sm:grid-cols-2">
-              <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-emerald-200">
+              <div className="rounded-md bg-up/10 px-3 py-2 text-[#a7e9cc]">
                 <span className="font-semibold">Achat : </span>
                 {strategy.rules.buy}
               </div>
-              <div className="rounded-md bg-rose-500/10 px-3 py-2 text-rose-200">
+              <div className="rounded-md bg-down/10 px-3 py-2 text-[#ffb3bd]">
                 <span className="font-semibold">Vente : </span>
                 {strategy.rules.sell}
               </div>
@@ -152,15 +152,15 @@ export function ConfigForm({ value, onChange, strategies, intervals, intervalExt
               onClick={() => onChange({ ...value, interval: it.id })}
               className={cx(
                 'rounded-lg border px-3 py-2 text-left transition-colors',
-                it.id === value.interval ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-slate-700 hover:border-slate-500 hover:bg-slate-800/50',
+                it.id === value.interval ? 'border-accent/60 bg-accent/10' : 'border-line hover:border-line-strong hover:bg-raised/60',
               )}
             >
-              <div className="text-sm font-semibold text-slate-100">{it.label}</div>
-              <div className="text-xs text-slate-400">{INTERVAL_HINTS[it.id]}</div>
+              <div className="text-sm font-semibold text-ink">{it.label}</div>
+              <div className="text-xs text-ink-3">{INTERVAL_HINTS[it.id]}</div>
             </button>
           ))}
         </div>
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-3 text-xs text-ink-3">
           Le bot analyse le marché à chaque nouvelle bougie clôturée. Les indicateurs (moyennes, RSI…) sont calculés sur ces bougies.
         </p>
         {intervalExtra && <div className="mt-4">{intervalExtra}</div>}
@@ -181,10 +181,10 @@ export function ConfigForm({ value, onChange, strategies, intervals, intervalExt
             <NumberInput value={value.feePct} min={0} max={5} step={0.05} suffix="%" onChange={(n) => set('feePct', n)} />
           </Field>
         </div>
-        <label className="mt-4 flex items-center gap-2 text-sm text-slate-300">
+        <label className="mt-4 flex items-center gap-2 text-sm text-ink-2">
           <input
             type="checkbox"
-            className="h-4 w-4 accent-emerald-500"
+            className="h-4 w-4 accent-accent"
             checked={value.allowFractional}
             onChange={(e) => set('allowFractional', e.target.checked)}
           />

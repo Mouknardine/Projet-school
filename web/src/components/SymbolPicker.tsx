@@ -68,19 +68,19 @@ export function SymbolPicker({ value, onChange }: { value: string[]; onChange: (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {value.map((s) => (
-          <span key={s} className="inline-flex items-center gap-1 rounded-md bg-slate-800 py-1 pl-2.5 pr-1 text-sm font-medium text-slate-100 ring-1 ring-slate-700">
+          <span key={s} className="inline-flex items-center gap-1 rounded-md bg-raised py-1 pl-2.5 pr-1 text-sm font-medium text-ink ring-1 ring-line">
             {s}
             <button
               type="button"
               onClick={() => onChange(value.filter((v) => v !== s))}
-              className="rounded px-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+              className="rounded px-1 text-ink-3 hover:bg-line hover:text-ink"
               aria-label={`Retirer ${s}`}
             >
               ×
             </button>
           </span>
         ))}
-        {value.length === 0 && <span className="text-sm text-slate-500">Aucune action sélectionnée</span>}
+        {value.length === 0 && <span className="text-sm text-ink0">Aucune action sélectionnée</span>}
       </div>
 
       <div ref={boxRef} className="relative">
@@ -102,24 +102,24 @@ export function SymbolPicker({ value, onChange }: { value: string[]; onChange: (
           }}
         />
         {open && query.trim().length >= 2 && (
-          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-700 bg-slate-900 shadow-xl">
-            {searching && <div className="px-3 py-2 text-sm text-slate-400">Recherche…</div>}
-            {searchError && <div className="px-3 py-2 text-sm text-rose-300">{searchError}</div>}
+          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-line bg-surface shadow-xl">
+            {searching && <div className="px-3 py-2 text-sm text-ink-3">Recherche…</div>}
+            {searchError && <div className="px-3 py-2 text-sm text-down">{searchError}</div>}
             {!searching && !searchError && results.length === 0 && (
-              <div className="px-3 py-2 text-sm text-slate-400">Aucun résultat. Appuyez sur Entrée pour ajouter « {query.trim().toUpperCase()} ».</div>
+              <div className="px-3 py-2 text-sm text-ink-3">Aucun résultat. Appuyez sur Entrée pour ajouter « {query.trim().toUpperCase()} ».</div>
             )}
             {results.map((r) => (
               <button
                 key={r.symbol}
                 type="button"
                 onClick={() => add(r.symbol)}
-                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-800"
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-raised"
               >
                 <span>
-                  <span className="font-semibold text-slate-100">{r.symbol}</span>
-                  <span className="ml-2 text-slate-400">{r.name}</span>
+                  <span className="font-semibold text-ink">{r.symbol}</span>
+                  <span className="ml-2 text-ink-3">{r.name}</span>
                 </span>
-                <span className="shrink-0 text-xs text-slate-500">
+                <span className="shrink-0 text-xs text-ink0">
                   {r.exchange} · {r.type}
                 </span>
               </button>
@@ -129,7 +129,7 @@ export function SymbolPicker({ value, onChange }: { value: string[]; onChange: (
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-slate-400">Listes rapides :</span>
+        <span className="text-xs text-ink-3">Listes rapides :</span>
         {PRESETS.map((p) => {
           const active = p.symbols.length === value.length && p.symbols.every((s) => value.includes(s));
           return (
@@ -139,10 +139,10 @@ export function SymbolPicker({ value, onChange }: { value: string[]; onChange: (
               onClick={() => onChange(p.symbols)}
               className={cx(
                 'rounded-md px-2 py-1 text-xs ring-1 transition-colors',
-                active ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40' : 'text-slate-300 ring-slate-700 hover:bg-slate-800',
+                active ? 'bg-accent/15 text-accent-text ring-accent/40' : 'text-ink-2 ring-line hover:bg-raised',
               )}
             >
-              {p.label} <span className="text-slate-500">{p.hint}</span>
+              {p.label} <span className="text-ink0">{p.hint}</span>
             </button>
           );
         })}

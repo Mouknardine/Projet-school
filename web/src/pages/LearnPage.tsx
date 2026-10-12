@@ -16,16 +16,16 @@ const STEPS: { title: string; text: string }[] = [
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card title={title}>
-      <div className="space-y-3 text-sm leading-relaxed text-slate-300">{children}</div>
+      <div className="space-y-3 text-sm leading-relaxed text-ink-2">{children}</div>
     </Card>
   );
 }
 
 function Term({ name, children }: { name: string; children: ReactNode }) {
   return (
-    <div className="rounded-lg bg-slate-950/50 px-3 py-2.5">
-      <div className="font-semibold text-slate-100">{name}</div>
-      <div className="mt-0.5 text-slate-400">{children}</div>
+    <div className="rounded-lg bg-page/60 px-3 py-2.5">
+      <div className="font-semibold text-ink">{name}</div>
+      <div className="mt-0.5 text-ink-3">{children}</div>
     </div>
   );
 }
@@ -35,8 +35,8 @@ export function LearnPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">Comment fonctionne le bot ?</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Comment fonctionne le bot ?</h1>
+        <p className="mt-1 text-sm text-ink-3">
           Un algorithme de trading est une suite de règles précises qui transforme des données de marché en décisions d'achat ou de vente, sans
           intervention humaine.
         </p>
@@ -45,14 +45,14 @@ export function LearnPage() {
       <Card title={`La boucle de décision (répétée toutes les ${config.tickSeconds} secondes)`}>
         <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {STEPS.map((s, i) => (
-            <li key={s.title} className="relative rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-              <div className="text-sm font-semibold text-emerald-300">{s.title}</div>
-              <p className="mt-1 text-sm text-slate-400">{s.text}</p>
-              {i < STEPS.length - 1 && <span className="absolute -right-2.5 top-1/2 hidden -translate-y-1/2 text-slate-600 lg:block">→</span>}
+            <li key={s.title} className="relative rounded-lg border border-line bg-page/60 p-3">
+              <div className="text-sm font-semibold text-up">{s.title}</div>
+              <p className="mt-1 text-sm text-ink-3">{s.text}</p>
+              {i < STEPS.length - 1 && <span className="absolute -right-2.5 top-1/2 hidden -translate-y-1/2 text-ink-3 lg:block">→</span>}
             </li>
           ))}
         </ol>
-        <p className="mt-4 text-sm text-slate-400">
+        <p className="mt-4 text-sm text-ink-3">
           Le bot ne décide qu'une fois par bougie <b>clôturée</b> : une bougie en cours peut encore changer, et un signal calculé dessus pourrait disparaître.
           Les ordres ne sont passés que pendant les heures d'ouverture de la bourse ; le reste du temps, le bot continue de suivre la valeur du portefeuille.
         </p>
@@ -61,11 +61,11 @@ export function LearnPage() {
       <Section title="Les stratégies disponibles">
         <div className="grid gap-3 md:grid-cols-2">
           {strategies.map((s) => (
-            <div key={s.id} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-              <div className="font-semibold text-slate-100">{s.name}</div>
-              <p className="mt-1 text-slate-400">{s.description}</p>
-              <p className="mt-2 text-emerald-300">Achat : {s.rules.buy}</p>
-              <p className="text-rose-300">Vente : {s.rules.sell}</p>
+            <div key={s.id} className="rounded-lg border border-line bg-page/60 p-3">
+              <div className="font-semibold text-ink">{s.name}</div>
+              <p className="mt-1 text-ink-3">{s.description}</p>
+              <p className="mt-2 text-up">Achat : {s.rules.buy}</p>
+              <p className="text-down">Vente : {s.rules.sell}</p>
             </div>
           ))}
         </div>
