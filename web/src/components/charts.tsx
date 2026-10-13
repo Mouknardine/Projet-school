@@ -46,7 +46,7 @@ export const SERIES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#
 const toSec = (ms: number) => Math.floor(ms / 1000) as UTCTimestamp;
 const fromTime = (t: Time) => new Date((t as number) * 1000);
 
-function useElementWidth<T extends HTMLElement>() {
+export function useElementWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
@@ -61,7 +61,7 @@ function useElementWidth<T extends HTMLElement>() {
 }
 
 /** Graduations « rondes » pour un axe (1, 2, 2.5, 5 × 10ⁿ). */
-function niceTicks(lo: number, hi: number, count: number): number[] {
+export function niceTicks(lo: number, hi: number, count: number): number[] {
   const span = hi - lo;
   if (span <= 0) return [lo];
   const raw = span / count;
@@ -72,7 +72,7 @@ function niceTicks(lo: number, hi: number, count: number): number[] {
   return out;
 }
 
-function compact(v: number): string {
+export function compact(v: number): string {
   const a = Math.abs(v);
   if (a >= 1e6) return `${fmtNum(v / 1e6, 2)} M`;
   if (a >= 1e4) return fmtNum(v, 0);

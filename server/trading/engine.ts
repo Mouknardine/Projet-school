@@ -5,6 +5,7 @@
 //   4. exécute l'ordre simulé (achat / vente) et l'enregistre dans l'historique avec sa justification ;
 //   5. enregistre la valeur du portefeuille pour la courbe de performance.
 
+import { assetInfo, PROFILES } from '../../shared/profile.ts';
 import type { Bot, TradeTrigger } from '../../shared/types.ts';
 import { getFxRate } from '../market/fx.ts';
 import { closedBars, getChart, rangeFor, type ChartData } from '../market/yahoo.ts';
@@ -17,6 +18,19 @@ const money = (n: number, currency: string) => `${n.toFixed(2)} ${currency}`;
 const qtyStr = (q: number) => (Number.isInteger(q) ? String(q) : q.toFixed(4));
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const rateStr = (from: string, to: string, fx: number) => (from === to ? '' : ` (1 ${from} = ${fx.toFixed(4)} ${to})`);
+
+/**
+ * Pour un placement créé avec le questionnaire, la raison d'un achat ou d'une attente s'explique par le profil
+ * de la personne (et non par la stratégie de référence « acheter et garder », qui ne sert qu'à comparer).
+ */
+export function profileReason(bot: Bot, symbol: string, action: 'BUY' | 'HOLD'): string | null {
+  if (!bot.profile || bot.strategy !== 'buy_hold') return null;
+  const name = assetInfo(symbol)?.name ?? symbol;
+  const limit = bot.maxLossPct > 0 ? `que si votre placement entier perd plus de ${bot.maxLossPct} % (votre limite de perte), pour protéger le reste` : 'jamais de lui-même';
+  return action === 'BUY'
+    ? `Achat de départ : ${name} fait partie des placements choisis pour votre profil « ${PROFILES[bot.profile.level].name} ». Le bot y place ${bot.positionSizePct} % de votre argent, puis il le garde : il ne le revendra ${limit}.`
+    : `Le bot garde ${name}, comme prévu : il ne le revendra ${limit}.`;
+}
 
 /** Cours d'une action prêt à être utilisé : prix dans sa devise et taux de change vers la devise du compte. */
 export interface MarketPrice {
@@ -266,6 +280,9 @@ export async function processSymbol(
     p: bot.params,
     interval: bot.interval,
   });
+
+  const own = profileReason(bot, symbol, signal.action === 'BUY' ? 'BUY' : 'HOLD');
+  if (own && signal.action !== 'SELL') signal.reason = own;
 
   // Pour un signal qu'on ne suit pas, on ne recopie que l'observation (pas « le bot achète », qui serait faux).
   const observed = lowerFirst(signal.fact ?? signal.reason);

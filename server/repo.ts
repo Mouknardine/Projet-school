@@ -3,7 +3,7 @@
 //   - db-postgres.ts : base Postgres (hébergement en ligne, ex. Supabase).
 // Le moteur du bot et l'API ne connaissent que cette interface.
 
-import type { Bot, BotConfig, BotStatus, CostLine, EquityPoint, LogEntry, LogLevel, Session, Side, Trade, TradeTrigger } from '../shared/types.ts';
+import type { Bot, BotConfig, BotProfile, BotStatus, CostLine, EquityPoint, LogEntry, LogLevel, Session, Side, Trade, TradeTrigger } from '../shared/types.ts';
 
 /** Mémoire interne du bot entre deux analyses. */
 export interface BotState {
@@ -98,6 +98,8 @@ export interface Repo {
   saveBotState(id: number, state: BotState): Promise<void>;
   setBotStatus(id: number, status: BotStatus): Promise<void>;
   setBotName(id: number, name: string): Promise<void>;
+  /** Met à jour ce qu'on garde du questionnaire (par exemple pour y ajouter la photo du choix des placements). */
+  setBotProfile(id: number, profile: BotProfile): Promise<void>;
   setCash(id: number, cash: number): Promise<void>;
   setBotTick(id: number, time: number, error: string | null): Promise<void>;
   deleteBot(id: number): Promise<void>;

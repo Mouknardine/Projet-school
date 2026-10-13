@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { bandOf, candidatePool, quoteCurrencyOf, computeProfile, configFromProfile, pickAssets, PROFILES, QUESTIONS, type Answers, type MeasuredAsset } from '../shared/profile.ts';
+import { bandOf, candidatePool, quoteCurrencyOf, computeProfile, configFromProfile, pickAssets, PROFILES, QUESTIONS, traceSelection, type Answers, type MeasuredAsset } from '../shared/profile.ts';
 import { measureRisk, yearBefore } from '../server/market/risk.ts';
 import { getStrategy, normalizeParams } from '../server/trading/strategies.ts';
 import { barsFromCloses } from './helpers.ts';
@@ -138,6 +138,33 @@ describe('choix des actions selon le risque mesuré', () => {
     assert.equal(picked[0].favorite, true);
     assert.equal(picked[0].tooRisky, true);
     assert.equal(picked.length, PROFILES[1].slots.length);
+  });
+
+  it('la trace du choix explique chaque case : le gagnant, ceux qui étaient moins bons, ceux déjà pris', () => {
+    const trace = traceSelection(2, universe);
+    assert.deepEqual(
+      trace.picks.map((p) => p.asset.symbol),
+      pickAssets(2, universe).map((p) => p.symbol),
+    );
+    assert.equal(trace.slots.length, PROFILES[2].slots.length);
+    for (const slot of trace.slots) {
+      const chosen = slot.candidates.find((c) => c.status === 'chosen');
+      if (slot.nearest) continue;
+      assert.ok(chosen, slot.band);
+      // Aucun candidat libre n'avait un meilleur rapport gain / risque que celui qui a été pris.
+      assert.ok(slot.candidates.filter((c) => c.status === 'behind').every((c) => c.quality <= chosen.quality));
+    }
+    // Deuxième case « calme » : l'or a déjà été pris par la première.
+    const second = trace.slots.filter((s) => s.band === 'calm')[1];
+    assert.equal(second.candidates.find((c) => c.symbol === 'ZGLD.SW')?.status, 'taken');
+  });
+
+  it('pas plus de deux placements du même secteur : le troisième est écarté, avec la raison', () => {
+    const health = [m('NOVN.SW', 14, 30), m('ROP.SW', 15, 25), m('ALC.SW', 16, 20), m('SCMN.SW', 13, 5), m('CHCORP.SW', 4, 3)];
+    const trace = traceSelection(2, health);
+    const third = trace.slots.find((s) => s.candidates.some((c) => c.symbol === 'ALC.SW' && c.status === 'sector'));
+    assert.ok(third, 'Alcon devrait être écartée : deux placements « santé » déjà pris');
+    assert.ok(!trace.picks.some((p) => p.asset.symbol === 'ALC.SW'));
   });
 
   it('un profil prudent ne reçoit que des placements dans la monnaie de son compte', () => {

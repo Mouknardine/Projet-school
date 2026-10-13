@@ -147,6 +147,30 @@ export interface BotProfile {
   answers: Record<string, string>;
   /** Agitation mesurée de chaque action au moment du choix (volatilité annuelle, en %). */
   volatility: Record<string, number>;
+  /** Tout ce que le bot a mesuré au moment de choisir : permet de rejouer et d'expliquer son choix. */
+  selection?: SelectionSnapshot | null;
+}
+
+/** Ce que le bot a mesuré pour un placement candidat, sur l'année qui précède le choix (en monnaie du compte). */
+export interface SelectionMeasure {
+  symbol: string;
+  name: string;
+  /** Volatilité annuelle (en %) : de combien il bouge habituellement. */
+  volatility: number;
+  /** Évolution sur l'année passée (en %). */
+  perf1y: number;
+}
+
+/** La « photo » du choix des placements, gardée avec le bot. */
+export interface SelectionSnapshot {
+  /** Date des cours utilisés : le bot n'a vu que l'année qui précède. */
+  time: number;
+  /** Tous les placements analysés. */
+  measured: SelectionMeasure[];
+  /** Entreprises choisies par la personne. */
+  favorites: string[];
+  /** Placements proposés par le bot, puis retirés par la personne avant le lancement. */
+  removed: string[];
 }
 
 export interface Bot extends BotConfig {

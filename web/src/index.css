@@ -115,10 +115,102 @@ input[type='number']::-webkit-inner-spin-button {
   padding-top: env(safe-area-inset-top);
 }
 
+/* Une courbe qui se dessine de gauche à droite (le chemin doit avoir pathLength="1"). */
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.draw-line {
+  stroke-dasharray: 1;
+  animation: draw-line 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Le dernier point d'une courbe « respire » : la valeur est en direct. */
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.pulse-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse-ring 2.4s ease-out infinite;
+}
+
+/* Chronologie : la ligne se trace vers le bas, les étapes apparaissent l'une après l'autre. */
+@keyframes grow-down {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.tl-line {
+  transform-origin: top;
+  animation: grow-down 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.tl-item {
+  animation: fade-up 0.4s ease-out both;
+}
+
+/* Barres qui se remplissent (répartition, rapport gain / risque). */
+@keyframes grow-right {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.grow-right {
+  transform-origin: left;
+  animation: grow-right 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Rayures des placements pas encore achetés. */
+.stripes {
+  background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.09) 0 4px, transparent 4px 8px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
   .animate-sheet,
-  .animate-fade-in {
+  .animate-fade-in,
+  .draw-line,
+  .pulse-dot,
+  .pulse-ring,
+  .tl-line,
+  .tl-item,
+  .grow-right {
     animation: none;
   }
 }

@@ -162,6 +162,9 @@ export function createPostgresRepo(sql: Sql): Repo {
     async setBotName(id, name) {
       await sql`update bots set name = ${name} where id = ${id}`;
     },
+    async setBotProfile(id, profile) {
+      await sql`update bots set profile = ${json(profile)}::jsonb where id = ${id}`;
+    },
     async setCash(id, cash) {
       await sql`update bots set cash = ${cash} where id = ${id}`;
     },

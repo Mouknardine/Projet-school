@@ -473,9 +473,18 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
         capital: draft.capital,
         currency: draft.currency,
         broker: draft.broker,
+        // La photo du choix : tout ce que le bot a mesuré, pour pouvoir expliquer plus tard pourquoi il a pris ces placements.
+        selection: assets
+          ? {
+              time: assets.time,
+              measured: assets.measured.map((m) => ({ symbol: m.symbol, name: m.name, volatility: m.volatility, perf1y: m.perf1y })),
+              favorites: assets.picked.filter((p) => p.favorite).map((p) => p.symbol),
+              removed,
+            }
+          : null,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [result, draft, picked.map((p) => p.symbol).join(',')],
+    [result, draft, assets, removed],
   );
   // Simulation honnête : le bot se place il y a 2 ans et choisit ses placements avec les seuls cours connus à cette date.
   // Elle est relancée si la personne retire un placement (il est alors exclu du choix d'il y a 2 ans aussi).

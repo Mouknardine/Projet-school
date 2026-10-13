@@ -21,6 +21,7 @@ import {
   type LogLevel,
   type Quote,
   type RiskLevel,
+  type SelectionSnapshot,
   type StrategyId,
 } from '../shared/types.ts';
 import { fxAt, getFxHistory, getFxRate } from './market/fx.ts';
@@ -95,6 +96,17 @@ const configSchema = z.object({
       level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
       answers: z.record(z.string().max(40), z.string().max(200)),
       volatility: z.record(z.string().max(20), z.number()),
+      selection: z
+        .object({
+          time: z.number(),
+          measured: z
+            .array(z.object({ symbol: z.string().max(20), name: z.string().max(200), volatility: z.number(), perf1y: z.number() }))
+            .max(100),
+          favorites: z.array(z.string().max(20)).max(3),
+          removed: z.array(z.string().max(20)).max(20),
+        })
+        .nullable()
+        .optional(),
     })
     .nullable()
     .optional()
@@ -296,8 +308,9 @@ export function createApi(deps: AppDeps): Hono {
     const currency = parsed.data.currency;
     const pool = candidatePool(parsed.data.region, parsed.data.crypto === '1' && level >= 4, { level, currency }).map((x) => x.symbol);
     const symbols = [...new Set([...favorites, ...pool])];
+    const time = Date.now();
     const { measured, errors } = await measureAssets(symbols, { accountCurrency: currency });
-    const body: AssetSuggestion = { picked: pickAssets(level, measured, favorites), analysed: measured.length, errors };
+    const body: AssetSuggestion = { picked: pickAssets(level, measured, favorites), analysed: measured.length, measured, time, errors };
     return c.json(body);
   });
 
@@ -472,6 +485,33 @@ export function createApi(deps: AppDeps): Hono {
   });
 
   api.get('/bots/:id', async (c) => c.json(await botDetail((await loadBot(c)).id)));
+
+  // Comment le bot a choisi ses placements : tout ce qu'il a mesuré au moment du choix.
+  // Les bots créés avant que cette photo soit gardée la reçoivent ici une fois : le choix est refait avec les seuls cours
+  // connus à leur date de création (l'année d'avant), exactement comme le bot l'a fait.
+  api.get('/bots/:id/selection', async (c) => {
+    const bot = await loadBot(c);
+    if (!bot.profile) throw new HttpError(404, "Ce bot a été réglé à la main : il n'a pas choisi ses placements.");
+    if (bot.profile.selection) return c.json(bot.profile.selection);
+    const { level, answers } = bot.profile;
+    const favorites = (answers.favorites ?? '')
+      .toUpperCase()
+      .split(',')
+      .filter((s) => /^[A-Z0-9.\-=^]{1,20}$/.test(s))
+      .slice(0, 3);
+    const pool = candidatePool(answers.region ?? 'any', answers.crypto === 'yes' && level >= 4, { level, currency: bot.currency }).map((x) => x.symbol);
+    const { measured, errors } = await measureAssets([...new Set([...favorites, ...bot.symbols, ...pool])], { asOf: bot.createdAt, accountCurrency: bot.currency });
+    const proposed = pickAssets(level, measured, favorites).map((p) => p.symbol);
+    const selection: SelectionSnapshot = {
+      time: bot.createdAt,
+      measured: measured.map((m) => ({ symbol: m.symbol, name: m.name, volatility: m.volatility, perf1y: m.perf1y })),
+      favorites,
+      removed: proposed.filter((s) => !bot.symbols.includes(s)),
+    };
+    // Gardée seulement si toutes les mesures ont réussi (sinon, on réessaiera la prochaine fois).
+    if (errors.length === 0) await repo.setBotProfile(bot.id, { ...bot.profile, selection });
+    return c.json(selection);
+  });
 
   api.patch('/bots/:id', requireAdmin, async (c) => {
     const bot = await loadBot(c);

@@ -16,6 +16,8 @@ export interface TradeContext {
   takeProfitPct?: number;
   /** Nom complet de chaque action (ex. AAPL → Apple Inc.). */
   names?: Record<string, string | null>;
+  /** Quand le bot revendra ce qu'il garde (remplace la règle de la stratégie, pour un placement créé avec le questionnaire). */
+  sellRule?: string;
 }
 
 const TRIGGERS: Record<TradeTrigger, { chip: string; long: string; icon: typeof Zap; tone: 'accent' | 'down' | 'up' | 'neutral' }> = {
@@ -190,7 +192,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
+export function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
   trade: Row;
   trades: Row[];
   currency: string;
@@ -300,7 +302,8 @@ function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
             <div className="rounded-xl bg-page/60 p-3.5 leading-relaxed text-ink-2">
               <p>Le bot garde ces actions pour l'instant. Il les revendra :</p>
               <ul className="mt-1.5 list-disc space-y-1 pl-5">
-                {strategy && <li>quand sa stratégie le décidera : {lowerFirst(strategy.rules.sell)}</li>}
+                {context.sellRule && <li>{context.sellRule}</li>}
+                {strategy && !context.sellRule && <li>quand sa stratégie le décidera : {lowerFirst(strategy.rules.sell)}</li>}
                 {!!stopLossPct && <li>automatiquement si le cours baisse de {stopLossPct} % sous le prix d'achat (stop-loss, pour limiter la perte) ;</li>}
                 {!!takeProfitPct && <li>automatiquement si le cours monte de {takeProfitPct} % au-dessus du prix d'achat (objectif de gain).</li>}
               </ul>

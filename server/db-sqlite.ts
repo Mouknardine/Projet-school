@@ -176,6 +176,9 @@ export function createSqliteRepo(dbPath: string): Repo {
     async setBotName(id, name) {
       run('UPDATE bots SET name = ? WHERE id = ?', name, id);
     },
+    async setBotProfile(id, profile) {
+      run('UPDATE bots SET profile = ? WHERE id = ?', JSON.stringify(profile), id);
+    },
     async setCash(id, cash) {
       run('UPDATE bots SET cash = ? WHERE id = ?', cash, id);
     },

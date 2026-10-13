@@ -187,4 +187,18 @@ describe('moteur du bot en direct', () => {
     await endProtectionIfDone(repo, (await repo.getBot(bot.id))!, state, now + 180_000);
     assert.equal((await repo.getBot(bot.id))!.status, 'paused');
   });
+
+  it('un placement du questionnaire explique ses achats par le profil, pas par la stratégie de référence', async () => {
+    const profile = { level: 2 as const, answers: {}, volatility: { TEST: 12 } };
+    const bot = await createBot({ strategy: 'buy_hold', params: {}, positionSizePct: 16, feePct: 0, stopLossPct: 0, maxLossPct: 10, profile });
+    const state = await repo.getBotState(bot.id);
+    const now = Date.now();
+    const bars = barsFromCloses([100, 100, 100], now - 4 * HOUR, HOUR);
+    await processSymbol(repo, bot, state, 'TEST', { quote: quote(100, now), bars, fx: 1 }, { now, trade: true });
+    const [buy] = await repo.listTrades(bot.id);
+    assert.equal(buy.side, 'BUY');
+    assert.match(buy.reason, /profil « Prudent »/);
+    assert.match(buy.reason, /plus de 10 %/);
+    assert.doesNotMatch(buy.reason, /stratégie de référence/);
+  });
 });

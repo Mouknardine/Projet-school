@@ -9,7 +9,7 @@
 // Le bot choisit ensuite lui-même ses actions en mesurant leur « agitation » (volatilité) sur l'année passée :
 // des placements calmes pour un profil prudent, plus agités pour un profil audacieux.
 
-import type { BacktestResult, BotConfig, BrokerId, Interval, RiskLevel, StrategyId } from './types.ts';
+import type { BacktestResult, BotConfig, BrokerId, Interval, RiskLevel, SelectionMeasure, SelectionSnapshot, StrategyId } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Le questionnaire
@@ -578,10 +578,14 @@ export interface PickedAsset extends MeasuredAsset {
   tooRisky: boolean;
 }
 
-/** Réponse du serveur : les placements choisis pour le profil, et combien ont été analysés. */
+/** Réponse du serveur : les placements choisis pour le profil, et tout ce qui a été mesuré pour les choisir. */
 export interface AssetSuggestion {
   picked: PickedAsset[];
   analysed: number;
+  /** Mesures de tous les candidats : gardées avec le bot pour pouvoir expliquer son choix plus tard. */
+  measured: MeasuredAsset[];
+  /** Date des cours utilisés. */
+  time: number;
   errors: string[];
 }
 
@@ -603,48 +607,104 @@ const bandIndex = (b: RiskBand) => BANDS.findIndex((x) => x.id === b);
 /** Variation typique sur une journée de bourse, plus parlante qu'une volatilité annuelle. */
 export const dailyMove = (volatility: number) => volatility / Math.sqrt(252);
 /** Rapport gain / risque sur l'année passée (le principe du ratio de Sharpe). */
-const quality = (m: MeasuredAsset) => m.perf1y / Math.max(m.volatility, 1);
+export const quality = (m: Pick<MeasuredAsset, 'perf1y' | 'volatility'>) => m.perf1y / Math.max(m.volatility, 1);
+
+/** Un candidat d'une case du profil, et ce qui lui est arrivé. */
+export interface SlotCandidate extends SelectionMeasure {
+  quality: number;
+  /**
+   * chosen : pris pour cette case · behind : moins bon rapport gain / risque que celui qui a été pris ·
+   * taken : déjà pris pour une autre case · sector : déjà deux placements de son secteur.
+   */
+  status: 'chosen' | 'behind' | 'taken' | 'sector';
+}
+
+/** Une « case » du profil (très calme, calme…) et comment le bot l'a remplie. */
+export interface SlotTrace {
+  band: RiskBand;
+  /** Placement pris pour cette case (null : plus aucun candidat). */
+  chosen: string | null;
+  /** Aucun placement dans cette tranche : le bot a pris le plus proche. */
+  nearest: boolean;
+  /** Tous les candidats de la tranche, du meilleur rapport gain / risque au moins bon. */
+  candidates: SlotCandidate[];
+}
+
+export interface SelectionTrace<T> {
+  picks: { asset: T; band: RiskBand; why: string; favorite: boolean; tooRisky: boolean }[];
+  /** Les entreprises choisies par la personne, prises avant tout le reste. */
+  favorites: string[];
+  slots: SlotTrace[];
+}
+
+type Measure = Pick<MeasuredAsset, 'symbol' | 'name' | 'volatility' | 'perf1y'>;
 
 /**
- * Choisit les placements du bot : chaque « case » du profil (très calme, calme, moyen…) reçoit le placement
- * de cette tranche d'agitation qui a eu le meilleur rapport gain / risque l'an passé, sans prendre plus de
- * deux placements du même secteur. Les entreprises choisies par la personne passent en premier.
+ * Choisit les placements du bot, en gardant la trace de chaque étape : chaque « case » du profil (très calme, calme,
+ * moyen…) reçoit le placement de cette tranche d'agitation qui a eu le meilleur rapport gain / risque l'an passé, sans
+ * prendre plus de deux placements du même secteur. Les entreprises choisies par la personne passent en premier.
  */
-export function pickAssets(level: RiskLevel, measured: MeasuredAsset[], favorites: string[] = []): PickedAsset[] {
+export function traceSelection<T extends Measure>(level: RiskLevel, measured: T[], favorites: string[] = []): SelectionTrace<T> {
   const profile = PROFILES[level];
   const maxBand = Math.max(...profile.slots.map(bandIndex));
   const bySymbol = new Map(measured.map((m) => [m.symbol, m]));
-  const picked: PickedAsset[] = [];
+  const picks: SelectionTrace<T>['picks'] = [];
+  const slots: SlotTrace[] = [];
   const sectorCount = new Map<string, number>();
   const sectorOf = (s: string) => assetInfo(s)?.sector ?? s;
-  const take = (m: MeasuredAsset, why: string, favorite: boolean) => {
+  const isTaken = (m: T) => picks.some((p) => p.asset.symbol === m.symbol);
+  const sectorFull = (m: T) => (sectorCount.get(sectorOf(m.symbol)) ?? 0) >= 2;
+  const take = (m: T, why: string, favorite: boolean) => {
     const band = bandOf(m.volatility);
-    picked.push({ ...m, band, why, favorite, tooRisky: bandIndex(band) > maxBand });
+    picks.push({ asset: m, band, why, favorite, tooRisky: bandIndex(band) > maxBand });
     sectorCount.set(sectorOf(m.symbol), (sectorCount.get(sectorOf(m.symbol)) ?? 0) + 1);
   };
 
+  const favs: string[] = [];
   for (const f of favorites.slice(0, 3)) {
     const m = bySymbol.get(f.toUpperCase());
-    if (m && !picked.some((p) => p.symbol === m.symbol)) take(m, 'Vous l’avez choisie.', true);
-  }
-
-  const slots = profile.slots.slice(0, Math.max(0, profile.slots.length - picked.length));
-  for (const slot of slots) {
-    const free = measured.filter((m) => !picked.some((p) => p.symbol === m.symbol) && (sectorCount.get(sectorOf(m.symbol)) ?? 0) < 2);
-    if (free.length === 0) break;
-    const inBand = free.filter((m) => bandOf(m.volatility) === slot);
-    const label = BANDS[bandIndex(slot)].label.toLowerCase();
-    if (inBand.length) {
-      const best = inBand.reduce((x, y) => (quality(y) > quality(x) ? y : x));
-      take(best, `Niveau d'agitation ${label}, comme prévu pour votre profil, et meilleur rapport gain / risque de sa catégorie l'an passé.`, false);
-    } else {
-      // Aucune action dans cette tranche : on prend la plus proche.
-      const target = slot === 'very_agitated' ? 55 : (BANDS[bandIndex(slot)].max + (bandIndex(slot) > 0 ? BANDS[bandIndex(slot) - 1].max : 0)) / 2;
-      const nearest = free.reduce((x, y) => (Math.abs(y.volatility - target) < Math.abs(x.volatility - target) ? y : x));
-      take(nearest, `Le placement le plus proche du niveau d'agitation « ${label} » prévu pour votre profil.`, false);
+    if (m && !isTaken(m)) {
+      take(m, 'Vous l’avez choisie.', true);
+      favs.push(m.symbol);
     }
   }
-  return picked;
+
+  for (const slot of profile.slots.slice(0, Math.max(0, profile.slots.length - picks.length))) {
+    const free = measured.filter((m) => !isTaken(m) && !sectorFull(m));
+    if (free.length === 0) break;
+    const inBand = measured.filter((m) => bandOf(m.volatility) === slot).sort((x, y) => quality(y) - quality(x));
+    // Ce qui empêche chaque candidat d'être pris, avant de remplir la case.
+    const blocked = new Map(inBand.map((m) => [m.symbol, isTaken(m) ? ('taken' as const) : sectorFull(m) ? ('sector' as const) : ('behind' as const)]));
+    const label = BANDS[bandIndex(slot)].label.toLowerCase();
+    const freeInBand = inBand.filter((m) => blocked.get(m.symbol) === 'behind');
+    let chosen: T;
+    let nearest = false;
+    if (freeInBand.length) {
+      chosen = freeInBand[0];
+      take(chosen, `Niveau d'agitation ${label}, comme prévu pour votre profil, et meilleur rapport gain / risque de sa catégorie l'an passé.`, false);
+    } else {
+      // Aucune action libre dans cette tranche : on prend la plus proche.
+      const target = slot === 'very_agitated' ? 55 : (BANDS[bandIndex(slot)].max + (bandIndex(slot) > 0 ? BANDS[bandIndex(slot) - 1].max : 0)) / 2;
+      chosen = free.reduce((x, y) => (Math.abs(y.volatility - target) < Math.abs(x.volatility - target) ? y : x));
+      nearest = true;
+      take(chosen, `Le placement le plus proche du niveau d'agitation « ${label} » prévu pour votre profil.`, false);
+    }
+    const candidates: SlotCandidate[] = inBand.map((m) => ({
+      symbol: m.symbol,
+      name: m.name,
+      volatility: m.volatility,
+      perf1y: m.perf1y,
+      quality: quality(m),
+      status: m.symbol === chosen.symbol ? 'chosen' : (blocked.get(m.symbol) ?? 'behind'),
+    }));
+    slots.push({ band: slot, chosen: chosen.symbol, nearest, candidates });
+  }
+  return { picks, favorites: favs, slots };
+}
+
+/** Les placements choisis pour un profil (voir traceSelection). */
+export function pickAssets(level: RiskLevel, measured: MeasuredAsset[], favorites: string[] = []): PickedAsset[] {
+  return traceSelection(level, measured, favorites).picks.map((p) => ({ ...p.asset, band: p.band, why: p.why, favorite: p.favorite, tooRisky: p.tooRisky }));
 }
 
 // ---------------------------------------------------------------------------
@@ -668,6 +728,7 @@ export function configFromProfile(input: {
   capital: number;
   currency: string;
   broker: string;
+  selection?: SelectionSnapshot | null;
 }): Omit<BotConfig, 'name'> {
   const profile = PROFILES[input.result.level];
   const n = Math.max(1, input.symbols.length);
@@ -686,6 +747,6 @@ export function configFromProfile(input: {
     currency: input.currency,
     broker,
     maxLossPct: input.result.maxLossPct,
-    profile: { level: input.result.level, answers: input.answers, volatility: input.volatility },
+    profile: { level: input.result.level, answers: input.answers, volatility: input.volatility, selection: input.selection ?? null },
   };
 }

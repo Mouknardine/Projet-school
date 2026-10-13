@@ -28,6 +28,11 @@ protège l'argent selon le risque accepté.
   de risque (profil dynamique : +39 % en gardant, +19 % en suivant la tendance). Résultats détaillés dans la page « Comprendre ».
 - **Simulation honnête avant de lancer** : le bot se place il y a 2 ans, choisit ses placements avec les seuls cours connus à
   cette date, puis on rejoue ce qui s'est réellement passé ensuite, frais compris. Aucune information du futur n'est utilisée.
+- **Page d'un placement, pour débutants** : la valeur de l'argent (courbe avec la mise de départ, la limite de perte et chaque
+  achat ou vente) ; la chronologie de tout ce que le bot a fait, jour par jour, et de ce qu'il va faire (achats à l'ouverture d'une
+  bourse, surveillance de la limite de perte) ; chaque placement avec son graphique (date et prix d'achat, zone de gain ou de
+  perte) ; **comment le bot a choisi** (les trois notes du profil, la carte agitation / gain de tous les placements analysés, le
+  classement de chaque case du profil, la répartition de l'argent) ; et les seules situations où il revend.
 - **Mode expert** (depuis la page « Comprendre ») : créer un bot à la main et tester toutes les stratégies sur le passé.
 
 - **Création de bots** : capital de départ et devise du compte (CHF, EUR ou USD), banque dont le bot paie les tarifs, actions suivies
@@ -171,6 +176,7 @@ En ligne, elles sont dans la base Postgres de Supabase.
 | GET | `/api/bots/:id/equity` | évolution de la valeur du portefeuille |
 | GET | `/api/bots/:id/logs` | journal du bot |
 | GET | `/api/bots/:id/chart?symbol=` | bougies + indicateurs + trades d'une action |
+| GET | `/api/bots/:id/selection` | comment un placement du questionnaire a choisi : tout ce que le bot a mesuré au moment du choix |
 | POST | `/api/backtest` | lancer un backtest |
 | GET | `/api/market/search?q=` | rechercher une action |
 | GET | `/api/profile/assets?level=&region=&crypto=&favorites=&currency=` | placements choisis par le bot pour un profil (volatilité mesurée sur un an, dans la monnaie du compte) |

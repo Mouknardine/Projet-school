@@ -12,6 +12,7 @@ import type {
   CostPreview,
   EquityPoint,
   LogEntry,
+  SelectionSnapshot,
   StrategyInfo,
   SymbolSearchResult,
   Trade,
@@ -129,6 +130,7 @@ export const api = {
   trades: (id: number) => request<Trade[]>('GET', `/bots/${id}/trades`),
   equity: (id: number) => request<EquityPoint[]>('GET', `/bots/${id}/equity`),
   logs: (id: number, limit = 100) => request<LogEntry[]>('GET', `/bots/${id}/logs?limit=${limit}`),
+  selection: (id: number) => request<SelectionSnapshot>('GET', `/bots/${id}/selection`),
   chart: (id: number, symbol: string) => request<ChartResponse>('GET', `/bots/${id}/chart?symbol=${encodeURIComponent(symbol)}`),
   csvUrl: (id: number) => `${API_BASE}/api/bots/${id}/trades.csv`,
 
