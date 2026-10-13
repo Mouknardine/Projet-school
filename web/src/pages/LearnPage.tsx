@@ -142,9 +142,11 @@ export function LearnPage() {
         <p>
           <b className="font-semibold text-ink">Le choix des actions.</b> Le bot télécharge un an de cours pour une soixantaine de placements (actions suisses,
           américaines et européennes, fonds, obligations, or, cryptos si vous les acceptez) et mesure leur <b className="font-semibold text-ink">volatilité</b> :
-          l'écart-type des variations quotidiennes, ramené sur un an (σ × √252). Il classe chaque placement par agitation (
-          {BANDS.map((b) => b.label.toLowerCase()).join(', ')}), puis remplit chaque « case » du profil avec le placement qui a eu le meilleur rapport
-          gain / risque l'an passé, sans prendre plus de deux placements du même secteur (diversification).
+          l'écart-type des variations quotidiennes, ramené sur un an (σ × √252), calculé dans la monnaie de votre compte (pour une action en dollars, les
+          variations du dollar comptent aussi). Il classe chaque placement par agitation ({BANDS.map((b) => b.label.toLowerCase()).join(', ')}), puis
+          remplit chaque « case » du profil avec le placement qui a eu le meilleur rapport gain / risque l'an passé, sans prendre plus de deux placements du
+          même secteur (diversification). Pour les profils très prudent et prudent, il ne garde que des placements dans la monnaie du compte : pas de risque
+          de change, pas de frais de change.
         </p>
         <p>
           <b className="font-semibold text-ink">La limite de perte.</b> À chaque analyse, le bot compare la valeur du placement à la baisse maximale acceptée. Si
@@ -153,31 +155,40 @@ export function LearnPage() {
         </p>
       </Section>
 
-      <Section title="Ce que nos tests ont montré : acheter et garder, ou acheter et vendre souvent ?">
+      <Section title="Ce que nos tests ont montré">
         <p>
-          Avant de choisir comment le bot gère un placement, nous avons rejoué deux façons de faire sur les vrais cours, avec les vrais frais de Yuh et un
-          compte en francs. Les placements testés sont ceux que le bot choisit pour chaque profil. Les deux façons de faire sont comparées sur la même période,
-          de mars 2022 à octobre 2026 (avec la forte baisse de 2022).
+          Pour savoir comment le bot doit gérer un placement, nous l'avons testé de façon honnête. Le bot se place en{' '}
+          <b className="font-semibold text-ink">octobre 2022</b> et choisit ses placements avec les seuls cours connus à ce moment-là (ceux de l'année d'avant).
+          Puis on rejoue ce qui s'est réellement passé jusqu'en octobre 2026, avec les vrais frais de Yuh, un compte en francs et 10 000 CHF par profil. Aucune
+          information du futur n'est utilisée.
         </p>
         <div className="-mx-1 overflow-x-auto px-1">
-          <table className="num w-full min-w-[560px] text-left text-sm">
+          <table className="num w-full min-w-[600px] text-left text-sm">
             <thead className="text-xs text-ink-3">
               <tr className="border-b border-line">
                 <th className="py-2 pr-3 font-medium">Profil</th>
-                <th className="py-2 pr-3 font-medium">Acheter et garder</th>
-                <th className="py-2 pr-3 font-medium">Suivre la tendance (achète et vend)</th>
-                <th className="py-2 font-medium">Frais payés par la tendance</th>
+                <th className="py-2 pr-3 font-medium">Le bot : acheter, garder, protéger</th>
+                <th className="py-2 pr-3 font-medium">Pire baisse</th>
+                <th className="py-2 pr-3 font-medium">Suivre la tendance (acheter et vendre)</th>
+                <th className="py-2 font-medium">Frais : bot / tendance</th>
               </tr>
             </thead>
             <tbody className="text-ink-2">
-              {[
-                ['Équilibré', '+61 %', '+19 %', '845 CHF (44 opérations)'],
-                ['Dynamique', '+220 %', '+155 %', '1 861 CHF (50 opérations)'],
-                ['Audacieux', '+159 %', '+79 %', '1 815 CHF (61 opérations)'],
-              ].map(([name, hold, trend, fees]) => (
-                <tr key={name} className="border-b border-line last:border-0">
-                  <td className="py-2 pr-3 font-semibold text-ink">{name}</td>
-                  <td className="py-2 pr-3 text-up">{nbsp(hold)}</td>
+              {(
+                [
+                  [1, '+26,0 %', '−7,5 %', '+20,3 %', '34 / 81 CHF'],
+                  [2, '+29,1 %', '−9,0 %', '+20,1 %', '46 / 133 CHF'],
+                  [3, '+35,1 %', '−11,5 %', '+21,1 %', '111 / 482 CHF'],
+                  [4, '+38,7 %', '−12,6 %', '+19,0 %', '140 / 666 CHF'],
+                  [5, '+41,2 %', '−29,7 %', '+18,8 %', '157 / 981 CHF'],
+                ] as [RiskLevel, string, string, string, string][]
+              ).map(([level, bot, drop, trend, fees]) => (
+                <tr key={level} className="border-b border-line last:border-0">
+                  <td className="py-2 pr-3 font-semibold whitespace-nowrap" style={{ color: LEVEL_COLORS[level] }}>
+                    {PROFILES[level].name}
+                  </td>
+                  <td className="py-2 pr-3 text-up">{nbsp(bot)}</td>
+                  <td className="py-2 pr-3 text-down">{nbsp(drop)}</td>
                   <td className="py-2 pr-3">{nbsp(trend)}</td>
                   <td className="py-2">{nbsp(fees)}</td>
                 </tr>
@@ -186,18 +197,27 @@ export function LearnPage() {
           </table>
         </div>
         <p>
-          Pour 10 000 CHF placés, avec une moyenne sur 100 jours et une marge de 10 %, le meilleur réglage testé. Les autres réglages (moyenne sur 50 ou 200 jours,
-          marge de 4 ou 5 %) n'ont pas fait mieux face à « acheter et garder ». Et la tendance n'a pas protégé des baisses : pour le profil prudent, la pire
-          baisse a même été plus forte (−21 % au lieu de −13 %).
+          <b className="font-semibold text-ink">1. Le profil se voit dans les résultats.</b> Plus le profil est audacieux, plus le placement a rapporté, et plus la
+          pire baisse a été forte : −7,5 % pour le profil très prudent, −29,7 % pour le profil audacieux. C'est la règle de base de la bourse.
         </p>
         <p>
-          <b className="font-semibold text-ink">Conclusion :</b> pour un petit investisseur, chaque achat ou vente d'une action étrangère coûte environ 1,6 % chez Yuh
-          (courtage, change, droit de timbre). Un bot qui achète et vend souvent perd ce que les allers-retours devraient lui faire gagner. Pour quelqu'un qui veut juste placer son
-          argent, le bot ajoute donc de la valeur en <b className="font-semibold text-ink">choisissant</b> des placements adaptés au profil, en{' '}
+          <b className="font-semibold text-ink">2. Acheter et vendre souvent ne paie pas.</b> À chaque niveau, suivre la tendance (moyenne sur 100 jours, vente
+          10 % en dessous) a rapporté moins, a coûté 2 à 6 fois plus de frais, et n'a réduit la pire baisse que pour le profil audacieux. Pour un petit investisseur, chaque
+          achat ou vente d'une action étrangère coûte environ 1,6 % chez Yuh (courtage, change, droit de timbre) : les allers-retours mangent les gains. Le bot
+          ajoute donc de la valeur en <b className="font-semibold text-ink">choisissant</b> des placements adaptés, en{' '}
           <b className="font-semibold text-ink">répartissant</b> l'argent et en <b className="font-semibold text-ink">protégeant</b> le placement, plutôt qu'en
-          essayant de deviner le bon moment. Les stratégies actives restent disponibles dans le mode expert, pour faire vos propres tests.
+          essayant de deviner le bon moment.
         </p>
-        <p className="text-xs text-ink-3">Tests faits le 13 octobre 2026 avec le backtest de l'application. Les résultats passés ne garantissent rien pour l'avenir.</p>
+        <p>
+          <b className="font-semibold text-ink">3. La monnaie compte.</b> Dans une première version, le profil très prudent avait choisi des actions américaines :
+          sur la même période, il a perdu 5,8 %. Le dollar a perdu environ 16 % face au franc, et la limite de perte de 5 % a été atteinte en octobre 2023. Avec
+          des placements en francs uniquement : +26 %. D'où la règle : les profils prudents restent dans la monnaie du compte, et le risque de tous les placements
+          est mesuré en francs, change compris.
+        </p>
+        <p className="text-xs text-ink-3">
+          Tests faits le 13 octobre 2026 avec la simulation de l'application. Une seule période de 4 ans ne prouve rien pour l'avenir : elle montre seulement
+          comment le bot se comporte.
+        </p>
       </Section>
 
       <Card title="Les mots à connaître">

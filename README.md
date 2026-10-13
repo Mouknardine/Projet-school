@@ -21,12 +21,13 @@ protège l'argent selon le risque accepté.
   européennes, fonds, obligations, or, cryptos) et remplit chaque « case » du profil (très calme, calme, moyen, agité…) avec le
   placement au meilleur rapport gain / risque, sans plus de deux placements par secteur. Les favoris de la personne sont ajoutés.
 - **Réglages automatiques** selon le profil : placements choisis, réserve de liquidités et **limite de perte globale** (si le
-  placement baisse plus que la perte acceptée, le bot vend tout et se met en pause). Le bot achète puis garde : nos tests sur 5 ans de
-  vrais cours (frais réels de Yuh) montrent qu'acheter et vendre souvent, par exemple en suivant la tendance, rapporte nettement
-  moins pour un petit investisseur (+19 % au lieu de +61 % pour le profil équilibré, de mars 2022 à octobre 2026). Ce résultat est
-  expliqué dans la page « Comprendre ».
-- **Simulation du passé avant de lancer** : le bot rejoue ses règles sur les vrais cours des 2 dernières années, frais compris,
-  et compare avec « acheter et garder ».
+  placement baisse plus que la perte acceptée, le bot vend tout et se met en pause). Les profils prudents ne prennent que des
+  placements dans la monnaie du compte (pas de risque ni de frais de change) ; pour tous, le risque est mesuré dans cette monnaie.
+  Le bot achète puis garde : nos tests honnêtes (choix en octobre 2022 avec les seuls cours d'avant, rejoué jusqu'en octobre 2026,
+  frais réels de Yuh) montrent qu'acheter et vendre souvent, par exemple en suivant la tendance, rapporte moins à tous les niveaux
+  de risque (profil dynamique : +39 % en gardant, +19 % en suivant la tendance). Résultats détaillés dans la page « Comprendre ».
+- **Simulation honnête avant de lancer** : le bot se place il y a 2 ans, choisit ses placements avec les seuls cours connus à
+  cette date, puis on rejoue ce qui s'est réellement passé ensuite, frais compris. Aucune information du futur n'est utilisée.
 - **Mode expert** (depuis la page « Comprendre ») : créer un bot à la main et tester toutes les stratégies sur le passé.
 
 - **Création de bots** : capital de départ et devise du compte (CHF, EUR ou USD), banque dont le bot paie les tarifs, actions suivies
@@ -172,7 +173,8 @@ En ligne, elles sont dans la base Postgres de Supabase.
 | GET | `/api/bots/:id/chart?symbol=` | bougies + indicateurs + trades d'une action |
 | POST | `/api/backtest` | lancer un backtest |
 | GET | `/api/market/search?q=` | rechercher une action |
-| GET | `/api/profile/assets?level=&region=&crypto=&favorites=` | placements choisis par le bot pour un profil (volatilité mesurée sur un an) |
+| GET | `/api/profile/assets?level=&region=&crypto=&favorites=&currency=` | placements choisis par le bot pour un profil (volatilité mesurée sur un an, dans la monnaie du compte) |
+| POST | `/api/profile/simulate` | simulation honnête d'un profil : choix des placements avec les seuls cours connus à la date de départ |
 | GET | `/api/costs/preview?broker=&currency=&amount=&symbols=` | frais réels d'un achat puis d'une revente, aux cours actuels |
 | POST | `/api/cron/tick` | analyse de tous les bots (appelée chaque minute par le planificateur en ligne) |
 

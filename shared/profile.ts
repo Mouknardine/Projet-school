@@ -238,12 +238,13 @@ export function trendExplanation(days: number, band: number): string {
 
 /**
  * Comment décide le bot d'un placement créé avec le questionnaire.
- * Nos tests sur 5 ans de vrais cours (oct. 2021 → oct. 2026, frais réels de Yuh) ont montré que, pour un petit
- * investisseur, acheter et vendre souvent (par exemple en suivant la tendance) rapporte nettement moins que de garder
- * ses placements : les frais et les allers-retours mangent les gains. Le bot choisit donc bien, puis garde et protège.
+ * Nos tests honnêtes sur les vrais cours (choix en oct. 2022 avec les seuls cours d'avant, puis rejoué jusqu'en
+ * oct. 2026, frais réels de Yuh) ont montré que, pour un petit investisseur, acheter et vendre souvent (par exemple en
+ * suivant la tendance) rapporte moins, à tous les niveaux de risque, que de garder ses placements : les frais et les
+ * allers-retours mangent les gains. Le bot choisit donc bien, puis garde et protège.
  */
 const HOLD_AND_PROTECT =
-  "Le bot achète les placements choisis dès que leur bourse est ouverte, puis il les garde. Chaque jour, il vérifie ce que vaut votre placement : s'il descend sous votre limite de perte, il vend tout pour protéger le reste. Il n'achète et ne vend pas sans arrêt : nos tests sur 5 ans de vrais cours montrent que les allers-retours coûtent plus en frais qu'ils ne rapportent.";
+  "Le bot achète les placements choisis dès que leur bourse est ouverte, puis il les garde. Chaque jour, il vérifie ce que vaut votre placement : s'il descend sous votre limite de perte, il vend tout pour protéger le reste. Il n'achète et ne vend pas sans arrêt : nos tests sur 4 ans de vrais cours montrent que les allers-retours coûtent plus en frais qu'ils ne rapportent.";
 
 export const PROFILES: Record<RiskLevel, ProfileInfo> = {
   1: {
