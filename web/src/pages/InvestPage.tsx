@@ -13,9 +13,10 @@ import {
   QUESTIONS,
   type Answers,
   type AssetSuggestion,
+  type ProfileSimulation,
   type Question,
 } from '../../../shared/profile.ts';
-import type { BacktestResult, SymbolSearchResult } from '../../../shared/types.ts';
+import type { SymbolSearchResult } from '../../../shared/types.ts';
 import { useAppData } from '../App.tsx';
 import { PerformanceChart } from '../components/charts.tsx';
 import { AgitationChip, LEVEL_COLORS, RiskGauge } from '../components/profile.tsx';
@@ -425,12 +426,8 @@ function MoneyStep({ draft, update, onBack, onNext }: { draft: Draft; update: (p
 // Le résultat : profil, placements choisis, simulation du passé, lancement
 // ---------------------------------------------------------------------------
 
-const SIM_RANGE: Record<string, { id: string; label: string }> = {
-  '1d': { id: '2y', label: '2 ans' },
-  '1h': { id: '1y', label: '1 an' },
-  '15m': { id: '1mo', label: '1 mois' },
-  '5m': { id: '1mo', label: '1 mois' },
-};
+/** Durée de la simulation honnête : le bot est « lancé » il y a 2 ans, avec ce qu'il pouvait savoir à ce moment-là. */
+const SIM_YEARS = 2;
 
 function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => void; onDone: () => void }) {
   const { config } = useAppData();
@@ -440,7 +437,7 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
   const [assets, setAssets] = useState<AssetSuggestion | null>(null);
   const [assetsError, setAssetsError] = useState<string | null>(null);
   const [removed, setRemoved] = useState<string[]>([]);
-  const [sim, setSim] = useState<BacktestResult | null>(null);
+  const [sim, setSim] = useState<ProfileSimulation | null>(null);
   const [simError, setSimError] = useState<string | null>(null);
   const [simLoading, setSimLoading] = useState(false);
   const [name, setName] = useState(`Mon placement ${profile.name.toLowerCase()}`);
@@ -479,17 +476,28 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [result, draft, picked.map((p) => p.symbol).join(',')],
   );
-  const range = SIM_RANGE[botConfig.interval];
-
-  // Simulation sur le passé, relancée si la personne retire un placement.
+  // Simulation honnête : le bot se place il y a 2 ans et choisit ses placements avec les seuls cours connus à cette date.
+  // Elle est relancée si la personne retire un placement (il est alors exclu du choix d'il y a 2 ans aussi).
+  const removedKey = removed.join(',');
   useEffect(() => {
-    if (botConfig.symbols.length === 0) return;
+    if (!assets) return;
     let cancelled = false;
     setSimLoading(true);
     setSimError(null);
     const t = setTimeout(() => {
       api
-        .backtest({ ...botConfig, range: range.id })
+        .simulateProfile({
+          level: result.level,
+          maxLossPct: result.maxLossPct,
+          region,
+          crypto,
+          favorites: favoritesKey ? favoritesKey.split(',') : [],
+          exclude: removedKey ? removedKey.split(',') : [],
+          years: SIM_YEARS,
+          capital: draft.capital,
+          currency: draft.currency,
+          broker: draft.broker,
+        })
         .then((r) => !cancelled && setSim(r))
         .catch((err) => !cancelled && setSimError(err instanceof Error ? err.message : String(err)))
         .finally(() => !cancelled && setSimLoading(false));
@@ -498,7 +506,7 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
       cancelled = true;
       clearTimeout(t);
     };
-  }, [botConfig, range.id]);
+  }, [assets, result.level, result.maxLossPct, region, crypto, favoritesKey, removedKey, draft.capital, draft.currency, draft.broker]);
 
   const launch = async () => {
     setLaunching(true);
@@ -636,10 +644,15 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
 
       {/* 4. Simulation du passé */}
       {assets && botConfig.symbols.length > 0 && (
-        <Card title={`Et si vous l'aviez lancé il y a ${range.label} ?`} subtitle="Le bot rejoue exactement ses règles sur les vrais cours du passé, frais compris.">
+        <Card
+          title={`Et si vous l'aviez lancé il y a ${SIM_YEARS} ans ?`}
+          subtitle="Le bot se met à la place d'il y a 2 ans : il ne connaît que les cours d'avant cette date, choisit ses placements, puis on regarde ce qui s'est vraiment passé ensuite, frais compris."
+        >
           {simError && <ErrorBox>{simError}</ErrorBox>}
-          {!sim && !simError && <AnalysisLoader text="Le bot rejoue ses décisions sur les cours du passé…" />}
-          {sim && <Simulation sim={sim} capital={draft.capital} currency={cur} rangeLabel={range.label} loading={simLoading} />}
+          {!sim && !simError && <AnalysisLoader text="Le bot se replace il y a 2 ans et rejoue ce qui s'est passé depuis…" />}
+          {sim && (
+            <Simulation sim={sim} capital={draft.capital} currency={cur} reservePct={100 - PROFILES[result.level].maxInvestedPct} loading={simLoading} />
+          )}
         </Card>
       )}
 
@@ -690,15 +703,39 @@ function AnalysisLoader({ text = "Le bot mesure l'agitation de chaque action sur
   );
 }
 
-function Simulation({ sim, capital, currency, rangeLabel, loading }: { sim: BacktestResult; capital: number; currency: string; rangeLabel: string; loading: boolean }) {
-  const s = sim.stats;
+function Simulation({ sim, capital, currency, reservePct, loading }: {
+  sim: ProfileSimulation;
+  capital: number;
+  currency: string;
+  reservePct: number;
+  loading: boolean;
+}) {
+  const r = sim.result;
+  const s = r.stats;
   const gain = s.finalEquity - capital;
-  const trades = sim.trades.length;
+  const trades = r.trades.length;
+  const years = `${sim.years} an${sim.years > 1 ? 's' : ''}`;
   return (
     <div className={cx('space-y-4 transition-opacity', loading && 'opacity-60')}>
+      <div className="rounded-2xl border border-line p-4">
+        <p className="text-sm leading-relaxed text-ink-2">
+          Le <b className="font-semibold text-ink">{fmtDate(sim.startTime)}</b>, avec les cours de l'année d'avant, le bot aurait choisi :
+        </p>
+        <ul className="mt-2.5 flex flex-wrap gap-1.5">
+          {sim.picked.map((p) => (
+            <li key={p.symbol} className="inline-flex items-center gap-1.5 rounded-full bg-raised py-1 pr-1 pl-3 text-sm text-ink">
+              {assetInfo(p.symbol)?.name ?? p.name}
+              <AgitationChip volatility={p.volatility} compact />
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2.5 text-xs leading-relaxed text-ink-3">
+          Ce ne sont pas forcément les mêmes qu'aujourd'hui : à l'époque, le bot ne pouvait pas savoir quelles actions allaient monter.
+        </p>
+      </div>
       <div className="rounded-2xl bg-page/60 p-4">
         <p className="text-sm text-ink-2">
-          Avec {fmtMoney(capital, currency, 0)} placés il y a {rangeLabel}, vous auriez aujourd'hui
+          Avec {fmtMoney(capital, currency, 0)} placés il y a {years}, vous auriez aujourd'hui
         </p>
         <div className="mt-1 flex flex-wrap items-baseline gap-x-3">
           <span className="num text-3xl font-semibold tracking-tight text-ink">{fmtMoney(s.finalEquity, currency, 0)}</span>
@@ -713,27 +750,29 @@ function Simulation({ sim, capital, currency, rangeLabel, loading }: { sim: Back
           <b className="font-semibold text-ink">Au pire moment</b>, le placement avait baissé de{' '}
           <span className="num font-semibold text-down">{fmtNum(s.maxDrawdownPct, 1)}&nbsp;%</span> par rapport à son plus haut.
         </li>
-        <li>
-          Pour comparer : acheter les mêmes placements au départ et ne plus y toucher aurait donné{' '}
-          <span className={cx('num font-semibold', pnlClass(s.benchmarkReturnPct))}>{fmtPct(s.benchmarkReturnPct, 1)}</span> (pire baisse :{' '}
-          {fmtNum(s.benchmarkMaxDrawdownPct, 1)}&nbsp;%).
-        </li>
+        {reservePct > 0 && (
+          <li>
+            Le bot a gardé {reservePct}&nbsp;% de côté. S'il avait tout investi, le résultat aurait été{' '}
+            <span className={cx('num font-semibold', pnlClass(s.benchmarkReturnPct))}>{fmtPct(s.benchmarkReturnPct, 1)}</span>, avec une pire baisse de{' '}
+            {fmtNum(s.benchmarkMaxDrawdownPct, 1)}&nbsp;%.
+          </li>
+        )}
         <li>
           Le bot a fait {trades} achat{trades > 1 ? 's' : ''} et vente{trades > 1 ? 's' : ''}, et payé {fmtMoney(s.feesPaid, currency, 0)} de frais.
         </li>
-        {sim.protectionAt !== null && (
+        {r.protectionAt !== null && (
           <li className="flex gap-2 rounded-xl border border-warn/30 bg-warn/10 p-3">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
             <span>
-              Le {fmtDate(sim.protectionAt)}, la baisse a atteint votre limite : le bot a tout vendu pour protéger votre argent, puis s'est arrêté.
+              Le {fmtDate(r.protectionAt)}, la baisse a atteint votre limite : le bot a tout vendu pour protéger votre argent, puis s'est mis en pause.
             </span>
           </li>
         )}
       </ul>
-      <PerformanceChart points={sim.equity} initialCapital={capital} currency={currency} title="Valeur du placement simulé" ranges={[]} height={240} />
+      <PerformanceChart points={r.equity} initialCapital={capital} currency={currency} title="Valeur du placement simulé" ranges={[]} height={240} />
       <p className="text-xs leading-relaxed text-ink-3">
-        Attention : le bot a choisi ces placements en regardant l'année passée, et cette simulation rejoue justement le passé. Elle est donc plus flatteuse que la
-        réalité. Le passé ne dit pas ce qui va se passer : c'est seulement pour voir comment votre placement aurait bougé, dans les hausses comme dans les baisses.
+        Cette simulation n'utilise aucune information du futur : à chaque instant, le bot ne connaît que les cours passés, comme il le fera avec votre vrai
+        placement. Elle montre ce qui se serait réellement passé, pas une promesse : les {years} à venir ne ressembleront pas forcément aux {years} passés.
       </p>
     </div>
   );

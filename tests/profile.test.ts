@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { bandOf, candidatePool, computeProfile, configFromProfile, pickAssets, PROFILES, QUESTIONS, type Answers, type MeasuredAsset } from '../shared/profile.ts';
-import { measureRisk } from '../server/market/risk.ts';
+import { measureRisk, yearBefore } from '../server/market/risk.ts';
 import { getStrategy, normalizeParams } from '../server/trading/strategies.ts';
 import { barsFromCloses } from './helpers.ts';
 
@@ -78,6 +78,21 @@ describe('choix des actions selon le risque mesuré', () => {
     const r = measureRisk(barsFromCloses(closes, Date.UTC(2025, 0, 1), (365 / 252) * 86_400_000))!;
     assert.ok(Math.abs(r.volatility - 15.9) < 0.3, `${r.volatility}`);
     assert.equal(measureRisk(barsFromCloses([1, 2, 3])), null);
+  });
+
+  it('à une date passée, la mesure n’utilise que les cours connus à cette date', () => {
+    const day = 86_400_000;
+    const start = Date.UTC(2023, 0, 2);
+    // Un an de cours calmes, puis une envolée de +200 % après la date de départ.
+    const calm = Array.from({ length: 300 }, (_, i) => 100 * (i % 2 ? 1.002 : 1));
+    const rally = Array.from({ length: 100 }, (_, i) => 100 * 1.011 ** (i + 1));
+    const bars = barsFromCloses([...calm, ...rally], start, day);
+    const asOf = start + 299 * day;
+    const past = yearBefore(bars, asOf);
+    assert.ok(past.every((b) => b.time <= asOf));
+    const r = measureRisk(past)!;
+    assert.ok(r.perf1y < 1, `${r.perf1y}`); // l'envolée future est invisible
+    assert.ok(measureRisk(bars)!.perf1y > 100);
   });
 
   const m = (symbol: string, volatility: number, perf1y = 10): MeasuredAsset => ({ symbol, name: symbol, currency: 'CHF', price: 100, volatility, perf1y });

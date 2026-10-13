@@ -53,7 +53,7 @@ const BAND_COLORS: Record<RiskBand, string> = {
 };
 
 /** Niveau d'agitation d'une action, avec sa variation typique sur une journée (plus parlante qu'une volatilité). */
-export function AgitationChip({ volatility }: { volatility: number }) {
+export function AgitationChip({ volatility, compact = false }: { volatility: number; compact?: boolean }) {
   const band = bandOf(volatility);
   const label = BANDS.find((b) => b.id === band)?.label ?? '';
   const color = BAND_COLORS[band];
@@ -63,7 +63,7 @@ export function AgitationChip({ volatility }: { volatility: number }) {
         <span className="size-1.5 rounded-full" style={{ background: color }} aria-hidden />
         {label}
       </span>
-      bouge d'environ {fmtNum(dailyMove(volatility), 1)}&nbsp;% par jour
+      {!compact && <>bouge d'environ {fmtNum(dailyMove(volatility), 1)}&nbsp;% par jour</>}
     </span>
   );
 }

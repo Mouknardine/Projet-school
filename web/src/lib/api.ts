@@ -16,7 +16,7 @@ import type {
   SymbolSearchResult,
   Trade,
 } from '../../../shared/types.ts';
-import type { AssetSuggestion } from '../../../shared/profile.ts';
+import type { AssetSuggestion, ProfileSimulation } from '../../../shared/profile.ts';
 
 const PASSWORD_KEY = 'tradebot.adminPassword';
 
@@ -92,6 +92,18 @@ export const api = {
       'GET',
       `/profile/assets?${new URLSearchParams({ level: String(p.level), region: p.region, crypto: p.crypto ? '1' : '0', favorites: p.favorites.join(',') })}`,
     ),
+  simulateProfile: (p: {
+    level: number;
+    maxLossPct: number;
+    region: string;
+    crypto: boolean;
+    favorites: string[];
+    exclude: string[];
+    years: number;
+    capital: number;
+    currency: string;
+    broker: string;
+  }) => request<ProfileSimulation>('POST', '/profile/simulate', p),
   costPreview: (p: { broker: string; currency: string; amount: number; feePct: number; fractional: boolean; symbols: string[] }) =>
     request<CostPreview>(
       'GET',

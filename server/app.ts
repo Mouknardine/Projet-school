@@ -25,7 +25,7 @@ import {
 } from '../shared/types.ts';
 import { fxAt, getFxHistory, getFxRate } from './market/fx.ts';
 import { measureAssets } from './market/risk.ts';
-import { candidatePool, pickAssets, type AssetSuggestion } from '../shared/profile.ts';
+import { candidatePool, configFromProfile, pickAssets, type AssetSuggestion, type ProfileSimulation } from '../shared/profile.ts';
 import { getChart, getQuote, MarketDataError, RANGE_LABELS, RANGES, rangeFor, searchSymbols } from './market/yahoo.ts';
 import type { Repo } from './repo.ts';
 import { BacktestError, runBacktest } from './trading/backtest.ts';
@@ -296,6 +296,91 @@ export function createApi(deps: AppDeps): Hono {
     const symbols = [...new Set([...favorites, ...pool])];
     const { measured, errors } = await measureAssets(symbols);
     const body: AssetSuggestion = { picked: pickAssets(level, measured, favorites), analysed: measured.length, errors };
+    return c.json(body);
+  });
+
+  // Simulation honnête d'un profil : le bot se place il y a quelques années, choisit ses placements avec les seuls cours
+  // connus à ce moment-là (l'année d'avant), puis on rejoue ce qui s'est passé ensuite. Aucune information du futur.
+  const simulateSchema = z.object({
+    level: z.number().int().min(1).max(5),
+    maxLossPct: z.number().min(0).max(90),
+    region: z.enum(['ch', 'world', 'tech', 'any']),
+    crypto: z.boolean().optional().default(false),
+    favorites: z.array(z.string().max(20)).max(3).optional().default([]),
+    exclude: z.array(z.string().max(20)).max(60).optional().default([]),
+    years: z.number().int().min(1).max(4).optional().default(2),
+    capital: z.number().min(100).max(100_000_000),
+    currency: z.enum(ACCOUNT_CURRENCIES),
+    broker: z.string().max(20),
+    /** Pour comparer : une autre stratégie que celle du profil (utilisé pour les tests de la page « Comprendre »). */
+    strategy: z.enum(STRATEGY_IDS as [StrategyId, ...StrategyId[]]).optional(),
+    params: z.record(z.string(), z.number()).optional(),
+  });
+  api.post('/profile/simulate', async (c) => {
+    const input = await parseBody(c, simulateSchema);
+    const level = input.level as RiskLevel;
+    const start = Date.now() - input.years * 365 * 86_400_000;
+    const valid = (s: string) => /^[A-Z0-9.\-=^]{1,20}$/.test(s);
+    const favorites = [...new Set(input.favorites.map((s) => s.toUpperCase()))].filter(valid).slice(0, 3);
+    const exclude = new Set(input.exclude.map((s) => s.toUpperCase()));
+    const pool = [...new Set([...favorites, ...candidatePool(input.region, input.crypto && level >= 4).map((x) => x.symbol)])].filter((s) => !exclude.has(s));
+
+    // 1. Ce que le bot aurait choisi à la date de départ, avec les cours de l'année d'avant uniquement.
+    const { measured } = await measureAssets(pool, { asOf: start });
+    const picked = pickAssets(level, measured, favorites);
+    if (picked.length === 0) throw new HttpError(400, "Pas assez d'historique de cours pour simuler ce profil.");
+
+    // 2. Les réglages du bot pour ce profil (ou une autre stratégie, pour comparer).
+    const base = configFromProfile({
+      result: { level, maxLossPct: input.maxLossPct },
+      answers: {},
+      symbols: picked.map((p) => p.symbol),
+      volatility: {},
+      capital: input.capital,
+      currency: input.currency,
+      broker: input.broker,
+    });
+    const strategyId = input.strategy ?? base.strategy;
+    const cfg = { ...base, strategy: strategyId, params: input.strategy ? normalizeParams(strategyId, input.params) : base.params, profile: null };
+    const warmup = getStrategy(cfg.strategy).warmup(cfg.params);
+
+    // 3. Les cours à partir de la date de départ (plus l'historique nécessaire aux calculs de la stratégie).
+    const charts = await Promise.all(cfg.symbols.map((s) => getChart(s, '1d', '5y')));
+    const barsBySymbol: Record<string, Bar[]> = {};
+    const currencyOf: Record<string, string> = {};
+    cfg.symbols.forEach((s, i) => {
+      const bars = charts[i].bars;
+      const first = bars.findIndex((b) => b.time >= start);
+      barsBySymbol[s] = first < 0 ? [] : bars.slice(Math.max(0, first - (warmup - 1)));
+      currencyOf[s] = charts[i].quote.currency;
+    });
+    const fxHistories = new Map<string, Bar[]>();
+    const fxNow = new Map<string, number>();
+    for (const cur of new Set(Object.values(currencyOf))) {
+      if (cur === cfg.currency) continue;
+      try {
+        fxHistories.set(cur, await getFxHistory(cur, cfg.currency, '1d', '5y'));
+        fxNow.set(cur, await getFxRate(cur, cfg.currency));
+      } catch (err) {
+        if (err instanceof MarketDataError) throw new HttpError(502, `Taux de change ${cur} → ${cfg.currency} : ${err.message}`);
+        throw err;
+      }
+    }
+    const fxBySymbol = Object.fromEntries(cfg.symbols.map((s) => [s, fxAt(fxHistories.get(currencyOf[s]) ?? [], fxNow.get(currencyOf[s]) ?? 1)]));
+    let result;
+    try {
+      result = runBacktest(cfg, barsBySymbol, { currencyOf, fxBySymbol });
+    } catch (err) {
+      if (err instanceof BacktestError) throw new HttpError(400, err.message);
+      throw err;
+    }
+    const body: ProfileSimulation = {
+      startTime: start,
+      years: input.years,
+      picked,
+      analysed: measured.length,
+      result: { ...result, currency: cfg.currency, range: `${input.years}y` },
+    };
     return c.json(body);
   });
 

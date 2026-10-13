@@ -6,6 +6,8 @@ import type { Bar } from '../../shared/types.ts';
 import type { MeasuredAsset } from '../../shared/profile.ts';
 import { getChart } from './yahoo.ts';
 
+const YEAR_MS = 365 * 86_400_000;
+
 /** Volatilité annuelle (en %) et évolution sur la période (en %), à partir de bougies d'un jour. */
 export function measureRisk(bars: Bar[]): { volatility: number; perf1y: number } | null {
   if (bars.length < 60) return null;
@@ -22,8 +24,22 @@ export function measureRisk(bars: Bar[]): { volatility: number; perf1y: number }
   };
 }
 
-/** Mesure plusieurs actions (quelques requêtes à la fois, pour ne pas surcharger Yahoo Finance). */
-export async function measureAssets(symbols: string[], concurrency = 6): Promise<{ measured: MeasuredAsset[]; errors: string[] }> {
+/** Les cours de l'année qui précède `asOf` (rien après : aucune information du futur). */
+export function yearBefore(bars: Bar[], asOf: number): Bar[] {
+  return bars.filter((b) => b.time <= asOf && b.time > asOf - YEAR_MS);
+}
+
+/**
+ * Mesure plusieurs actions sur l'année qui précède `asOf` (par défaut : maintenant), quelques requêtes à la fois
+ * pour ne pas surcharger Yahoo Finance. Avec une date passée, seuls les cours connus à cette date sont utilisés :
+ * c'est ce qui permet de simuler honnêtement ce que le bot aurait choisi à l'époque.
+ */
+export async function measureAssets(
+  symbols: string[],
+  opts: { asOf?: number; concurrency?: number } = {},
+): Promise<{ measured: MeasuredAsset[]; errors: string[] }> {
+  const asOf = opts.asOf ?? null;
+  const range = asOf === null ? '1y' : '5y';
   const measured: MeasuredAsset[] = [];
   const errors: string[] = [];
   let next = 0;
@@ -31,16 +47,17 @@ export async function measureAssets(symbols: string[], concurrency = 6): Promise
     while (next < symbols.length) {
       const symbol = symbols[next++];
       try {
-        const { quote, bars } = await getChart(symbol, '1d', '1y');
-        const risk = measureRisk(bars);
+        const { quote, bars } = await getChart(symbol, '1d', range);
+        const window = asOf === null ? bars : yearBefore(bars, asOf);
+        const risk = measureRisk(window);
         if (!risk) errors.push(`${symbol} : pas assez d'historique`);
-        else measured.push({ symbol, name: quote.name || symbol, currency: quote.currency, price: quote.price, ...risk });
+        else measured.push({ symbol, name: quote.name || symbol, currency: quote.currency, price: window[window.length - 1].close, ...risk });
       } catch (err) {
         errors.push(`${symbol} : ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(concurrency, symbols.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(opts.concurrency ?? 6, symbols.length) }, worker));
   // Ordre stable, quel que soit l'ordre d'arrivée des réponses.
   const order = new Map(symbols.map((s, i) => [s, i]));
   measured.sort((x, y) => (order.get(x.symbol) ?? 0) - (order.get(y.symbol) ?? 0));

@@ -9,7 +9,7 @@
 // Le bot choisit ensuite lui-même ses actions en mesurant leur « agitation » (volatilité) sur l'année passée :
 // des placements calmes pour un profil prudent, plus agités pour un profil audacieux.
 
-import type { BotConfig, BrokerId, Interval, RiskLevel, StrategyId } from './types.ts';
+import type { BacktestResult, BotConfig, BrokerId, Interval, RiskLevel, StrategyId } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Le questionnaire
@@ -554,6 +554,20 @@ export interface AssetSuggestion {
   errors: string[];
 }
 
+/**
+ * Simulation honnête d'un profil : le bot se place à une date passée, choisit ses placements avec les seuls cours
+ * connus à cette date (l'année d'avant), puis on rejoue ce qui s'est passé ensuite, frais compris.
+ */
+export interface ProfileSimulation {
+  /** Date de départ de la simulation. */
+  startTime: number;
+  years: number;
+  /** Ce que le bot aurait choisi à cette date, avec les mesures de l'époque. */
+  picked: PickedAsset[];
+  analysed: number;
+  result: Omit<BacktestResult, 'charts' | 'overlays'>;
+}
+
 const bandIndex = (b: RiskBand) => BANDS.findIndex((x) => x.id === b);
 /** Variation typique sur une journée de bourse, plus parlante qu'une volatilité annuelle. */
 export const dailyMove = (volatility: number) => volatility / Math.sqrt(252);
@@ -616,7 +630,7 @@ export const BROKER_ANSWERS: { id: BrokerId | 'unknown'; label: string; detail?:
 
 /** Les réglages complets du bot, déduits du profil et des placements choisis. */
 export function configFromProfile(input: {
-  result: ProfileResult;
+  result: Pick<ProfileResult, 'level' | 'maxLossPct'>;
   answers: Answers;
   symbols: string[];
   volatility: Record<string, number>;
