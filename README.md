@@ -20,9 +20,11 @@ protège l'argent selon le risque accepté.
 - **Choix des actions par le bot** : il mesure la volatilité sur un an d'une soixantaine de placements (actions suisses, américaines,
   européennes, fonds, obligations, or, cryptos) et remplit chaque « case » du profil (très calme, calme, moyen, agité…) avec le
   placement au meilleur rapport gain / risque, sans plus de deux placements par secteur. Les favoris de la personne sont ajoutés.
-- **Réglages automatiques** selon le profil : stratégie « suivre la tendance » sur bougies d'un jour (peu d'opérations, donc peu de
-  frais), réserve de liquidités, stop-loss, et **limite de perte globale** : si le placement baisse plus que la perte acceptée, le
-  bot vend tout et se met en pause.
+- **Réglages automatiques** selon le profil : placements choisis, réserve de liquidités et **limite de perte globale** (si le
+  placement baisse plus que la perte acceptée, le bot vend tout et se met en pause). Le bot achète puis garde : nos tests sur 5 ans de
+  vrais cours (frais réels de Yuh) montrent qu'acheter et vendre souvent, par exemple en suivant la tendance, rapporte nettement
+  moins pour un petit investisseur (+19 % au lieu de +61 % pour le profil équilibré, de mars 2022 à octobre 2026). Ce résultat est
+  expliqué dans la page « Comprendre ».
 - **Simulation du passé avant de lancer** : le bot rejoue ses règles sur les vrais cours des 2 dernières années, frais compris,
   et compare avec « acheter et garder ».
 - **Mode expert** (depuis la page « Comprendre ») : créer un bot à la main et tester toutes les stratégies sur le passé.

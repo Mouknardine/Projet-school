@@ -107,7 +107,7 @@ function Intro({ onStart }: { onStart: () => void }) {
         <h1 className="mt-4 text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">Placer votre argent, sans rien y connaître</h1>
         <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
           Répondez à {QUESTIONS.length + 2} questions simples sur vous et sur ce que vous attendez. Le bot en déduit votre <b className="font-semibold text-ink">profil
-          d'investisseur</b>, choisit lui-même les actions qui vous correspondent, puis s'occupe de tout : acheter, vendre et protéger votre argent.
+          d'investisseur</b>, choisit lui-même les actions qui vous correspondent, puis s'occupe de tout : les acheter, les surveiller et protéger votre argent.
         </p>
         <ul className="mt-5 space-y-2.5 text-sm text-ink-2">
           {[
@@ -558,12 +558,10 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
             {nbsp(profile.howItDecides)}
           </Step>
           <Step n={3}>
-            <b className="font-semibold text-ink">Ses protections : </b>
-            {botConfig.stopLossPct > 0 && <>il revend une action qui baisse de {botConfig.stopLossPct}&nbsp;% après l'achat</>}
-            {botConfig.takeProfitPct > 0 && <> et encaisse le gain quand elle monte de {botConfig.takeProfitPct}&nbsp;%</>}
-            {botConfig.stopLossPct > 0 ? '. ' : ''}
-            Et si votre placement descend sous <b className="font-semibold text-ink">{fmtMoney(floor, cur, 0)}</b> (−{result.maxLossPct}&nbsp;%, la baisse que vous avez dit pouvoir supporter),
-            il vend tout pour protéger le reste et se met en pause.
+            <b className="font-semibold text-ink">Sa protection : </b>
+            si votre placement descend sous <b className="font-semibold text-ink">{fmtMoney(floor, cur, 0)}</b> (−{result.maxLossPct}&nbsp;%, la baisse que vous avez dit
+            pouvoir supporter), il vend tout pour protéger le reste et se met en pause.
+            {botConfig.stopLossPct > 0 && <> Il revend aussi une action qui baisse de {botConfig.stopLossPct}&nbsp;% après l'achat.</>}
           </Step>
           <Step n={4}>Il paie les vrais frais de {brokerName} (courtage, change, droit de timbre) à chaque achat et chaque vente.</Step>
         </ol>
@@ -734,7 +732,8 @@ function Simulation({ sim, capital, currency, rangeLabel, loading }: { sim: Back
       </ul>
       <PerformanceChart points={sim.equity} initialCapital={capital} currency={currency} title="Valeur du placement simulé" ranges={[]} height={240} />
       <p className="text-xs leading-relaxed text-ink-3">
-        Le passé ne dit pas ce qui va se passer : c'est seulement pour se faire une idée de la façon dont le bot se comporte, dans les hausses comme dans les baisses.
+        Attention : le bot a choisi ces placements en regardant l'année passée, et cette simulation rejoue justement le passé. Elle est donc plus flatteuse que la
+        réalité. Le passé ne dit pas ce qui va se passer : c'est seulement pour voir comment votre placement aurait bougé, dans les hausses comme dans les baisses.
       </p>
     </div>
   );

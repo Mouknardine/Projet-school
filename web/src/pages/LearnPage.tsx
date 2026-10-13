@@ -129,7 +129,7 @@ export function LearnPage() {
                       {p.slots.length} placements : {kinds}
                     </td>
                     <td className="py-2.5 pr-3 text-ink-3">
-                      {strategies.find((s) => s.id === p.strategy)?.name ?? p.strategy} : moyenne sur {p.params.period} jours, vente {p.params.band}&nbsp;% en dessous
+                      {p.strategy === 'buy_hold' ? 'Achète, garde et protège' : (strategies.find((s) => s.id === p.strategy)?.name ?? p.strategy)}
                     </td>
                     <td className="py-2.5 pr-3 text-ink-3">{100 - p.maxInvestedPct}&nbsp;%</td>
                     <td className="py-2.5 text-ink-3">−{p.maxLossPct}&nbsp;%</td>
@@ -151,6 +151,53 @@ export function LearnPage() {
           elle est atteinte, il vend tout et se met en pause : c'est la traduction directe de votre réponse « à partir de quelle baisse ne dormiriez-vous plus
           tranquille ? ».
         </p>
+      </Section>
+
+      <Section title="Ce que nos tests ont montré : acheter et garder, ou acheter et vendre souvent ?">
+        <p>
+          Avant de choisir comment le bot gère un placement, nous avons rejoué deux façons de faire sur les vrais cours, avec les vrais frais de Yuh et un
+          compte en francs. Les placements testés sont ceux que le bot choisit pour chaque profil. Les deux façons de faire sont comparées sur la même période,
+          de mars 2022 à octobre 2026 (avec la forte baisse de 2022).
+        </p>
+        <div className="-mx-1 overflow-x-auto px-1">
+          <table className="num w-full min-w-[560px] text-left text-sm">
+            <thead className="text-xs text-ink-3">
+              <tr className="border-b border-line">
+                <th className="py-2 pr-3 font-medium">Profil</th>
+                <th className="py-2 pr-3 font-medium">Acheter et garder</th>
+                <th className="py-2 pr-3 font-medium">Suivre la tendance (achète et vend)</th>
+                <th className="py-2 font-medium">Frais payés par la tendance</th>
+              </tr>
+            </thead>
+            <tbody className="text-ink-2">
+              {[
+                ['Équilibré', '+61 %', '+19 %', '845 CHF (44 opérations)'],
+                ['Dynamique', '+220 %', '+155 %', '1 861 CHF (50 opérations)'],
+                ['Audacieux', '+159 %', '+79 %', '1 815 CHF (61 opérations)'],
+              ].map(([name, hold, trend, fees]) => (
+                <tr key={name} className="border-b border-line last:border-0">
+                  <td className="py-2 pr-3 font-semibold text-ink">{name}</td>
+                  <td className="py-2 pr-3 text-up">{nbsp(hold)}</td>
+                  <td className="py-2 pr-3">{nbsp(trend)}</td>
+                  <td className="py-2">{nbsp(fees)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Pour 10 000 CHF placés, avec une moyenne sur 100 jours et une marge de 10 %, le meilleur réglage testé. Les autres réglages (moyenne sur 50 ou 200 jours,
+          marge de 4 ou 5 %) n'ont pas fait mieux face à « acheter et garder ». Et la tendance n'a pas protégé des baisses : pour le profil prudent, la pire
+          baisse a même été plus forte (−21 % au lieu de −13 %).
+        </p>
+        <p>
+          <b className="font-semibold text-ink">Conclusion :</b> pour un petit investisseur, chaque achat ou vente d'une action étrangère coûte environ 1,6 % chez Yuh
+          (courtage, change, droit de timbre). Un bot qui achète et vend souvent perd ce que les allers-retours devraient lui faire gagner. Pour quelqu'un qui veut juste placer son
+          argent, le bot ajoute donc de la valeur en <b className="font-semibold text-ink">choisissant</b> des placements adaptés au profil, en{' '}
+          <b className="font-semibold text-ink">répartissant</b> l'argent et en <b className="font-semibold text-ink">protégeant</b> le placement, plutôt qu'en
+          essayant de deviner le bon moment. Les stratégies actives restent disponibles dans le mode expert, pour faire vos propres tests.
+        </p>
+        <p className="text-xs text-ink-3">Tests faits le 13 octobre 2026 avec le backtest de l'application. Les résultats passés ne garantissent rien pour l'avenir.</p>
       </Section>
 
       <Card title="Les mots à connaître">

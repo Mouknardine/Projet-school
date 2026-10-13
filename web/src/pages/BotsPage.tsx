@@ -13,7 +13,7 @@ import { usePolling } from '../lib/usePolling.ts';
 
 const STEPS = [
   { icon: ClipboardList, title: 'Vous répondez à quelques questions', text: 'Sur votre situation et le risque que vous acceptez. Environ 3 minutes.' },
-  { icon: Sparkles, title: 'Le bot choisit et investit', text: 'Il en déduit votre profil, choisit lui-même les actions et achète ou vend tout seul, sur les vrais cours.' },
+  { icon: Sparkles, title: 'Le bot choisit et investit', text: 'Il en déduit votre profil, choisit lui-même les actions, les achète et protège votre argent, sur les vrais cours.' },
   { icon: MessageSquareText, title: 'Vous suivez, sans rien décider', text: 'Graphiques à l’appui, chaque achat et chaque vente est expliqué en français.' },
 ];
 
@@ -33,8 +33,8 @@ export function BotsPage() {
           Placez votre argent, un robot s'occupe du reste
         </h1>
         <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-ink-2">
-          Pas besoin d'y connaître quoi que ce soit. Le bot s'adapte à ce que vous acceptez de risquer, choisit les actions à votre place et les achète ou les
-          vend tout seul sur les <b className="font-semibold text-ink">vrais cours de la bourse</b>, avec de l'<b className="font-semibold text-ink">argent fictif</b>.
+          Pas besoin d'y connaître quoi que ce soit. Le bot s'adapte à ce que vous acceptez de risquer, choisit les actions à votre place, les achète et surveille
+          votre argent tout seul, sur les <b className="font-semibold text-ink">vrais cours de la bourse</b>, avec de l'<b className="font-semibold text-ink">argent fictif</b>.
         </p>
         <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-ink">
           <b className="font-semibold">La question du projet :</b> peut-on investir avec un robot, sans prendre soi-même aucune décision ?

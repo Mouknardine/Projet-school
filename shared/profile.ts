@@ -236,6 +236,15 @@ export function trendExplanation(days: number, band: number): string {
   return `Une fois par jour, à la clôture de la bourse, le bot compare le prix de chaque placement à son prix moyen des ${days} derniers jours de bourse (environ ${weeks} semaines). Il achète quand le prix est au-dessus (la tendance monte) et vend quand il passe plus de ${band} % en dessous (la tendance s'est retournée). Il agit peu souvent : chaque achat et chaque vente coûte des frais.`;
 }
 
+/**
+ * Comment décide le bot d'un placement créé avec le questionnaire.
+ * Nos tests sur 5 ans de vrais cours (oct. 2021 → oct. 2026, frais réels de Yuh) ont montré que, pour un petit
+ * investisseur, acheter et vendre souvent (par exemple en suivant la tendance) rapporte nettement moins que de garder
+ * ses placements : les frais et les allers-retours mangent les gains. Le bot choisit donc bien, puis garde et protège.
+ */
+const HOLD_AND_PROTECT =
+  "Le bot achète les placements choisis dès que leur bourse est ouverte, puis il les garde. Chaque jour, il vérifie ce que vaut votre placement : s'il descend sous votre limite de perte, il vend tout pour protéger le reste. Il n'achète et ne vend pas sans arrêt : nos tests sur 5 ans de vrais cours montrent que les allers-retours coûtent plus en frais qu'ils ne rapportent.";
+
 export const PROFILES: Record<RiskLevel, ProfileInfo> = {
   1: {
     level: 1,
@@ -243,12 +252,12 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     tagline: "Votre priorité : ne pas perdre d'argent.",
     plan: "Le bot place votre argent dans des placements très calmes (des prêts à l'État ou à de grandes entreprises suisses, de l'or, des entreprises très stables) et garde 40 % de côté.",
     typicalYear: { worst: -3, best: 5 },
-    howItDecides: trendExplanation(50, 2),
-    strategy: 'trend',
-    params: { period: 50, band: 2 },
+    howItDecides: HOLD_AND_PROTECT,
+    strategy: 'buy_hold',
+    params: {},
     interval: '1d',
     maxInvestedPct: 60,
-    stopLossPct: 4,
+    stopLossPct: 0,
     takeProfitPct: 0,
     maxLossPct: 5,
     slots: ['very_calm', 'very_calm', 'calm', 'calm'],
@@ -259,12 +268,12 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     tagline: "Faire un peu mieux qu'un compte épargne, sans stress.",
     plan: 'Le bot mélange des placements très calmes et des actions de grandes entreprises stables, et garde 20 % de côté.',
     typicalYear: { worst: -8, best: 12 },
-    howItDecides: trendExplanation(50, 3),
-    strategy: 'trend',
-    params: { period: 50, band: 3 },
+    howItDecides: HOLD_AND_PROTECT,
+    strategy: 'buy_hold',
+    params: {},
     interval: '1d',
     maxInvestedPct: 80,
-    stopLossPct: 6,
+    stopLossPct: 0,
     takeProfitPct: 0,
     maxLossPct: 10,
     slots: ['very_calm', 'calm', 'calm', 'calm', 'medium'],
@@ -275,12 +284,12 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     tagline: 'Faire grossir votre argent en acceptant quelques baisses.',
     plan: 'Le bot investit surtout dans des actions de grandes entreprises, calmes et moyennes, et garde 10 % de côté.',
     typicalYear: { worst: -15, best: 25 },
-    howItDecides: trendExplanation(50, 4),
-    strategy: 'trend',
-    params: { period: 50, band: 4 },
+    howItDecides: HOLD_AND_PROTECT,
+    strategy: 'buy_hold',
+    params: {},
     interval: '1d',
     maxInvestedPct: 90,
-    stopLossPct: 8,
+    stopLossPct: 0,
     takeProfitPct: 0,
     maxLossPct: 15,
     slots: ['calm', 'calm', 'medium', 'medium', 'medium', 'agitated'],
@@ -291,12 +300,12 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     tagline: 'Viser plus de gains, en acceptant des baisses importantes.',
     plan: 'Le bot investit tout votre argent dans des actions plus agitées, qui peuvent monter plus vite… et baisser plus vite.',
     typicalYear: { worst: -25, best: 40 },
-    howItDecides: trendExplanation(100, 6),
-    strategy: 'trend',
-    params: { period: 100, band: 6 },
+    howItDecides: HOLD_AND_PROTECT,
+    strategy: 'buy_hold',
+    params: {},
     interval: '1d',
     maxInvestedPct: 100,
-    stopLossPct: 12,
+    stopLossPct: 0,
     takeProfitPct: 0,
     maxLossPct: 25,
     slots: ['calm', 'medium', 'medium', 'agitated', 'agitated', 'agitated'],
@@ -307,12 +316,12 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     tagline: 'Chercher le maximum de gains, en acceptant de grosses baisses.',
     plan: "Le bot investit tout votre argent dans les actions les plus agitées (et un peu de cryptos si vous les acceptez). C'est le profil qui peut le plus gagner, et le plus perdre.",
     typicalYear: { worst: -35, best: 60 },
-    howItDecides: trendExplanation(100, 8),
-    strategy: 'trend',
-    params: { period: 100, band: 8 },
+    howItDecides: HOLD_AND_PROTECT,
+    strategy: 'buy_hold',
+    params: {},
     interval: '1d',
     maxInvestedPct: 100,
-    stopLossPct: 15,
+    stopLossPct: 0,
     takeProfitPct: 0,
     maxLossPct: 35,
     slots: ['medium', 'agitated', 'agitated', 'very_agitated', 'very_agitated'],

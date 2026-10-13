@@ -136,7 +136,7 @@ describe('choix des actions selon le risque mesuré', () => {
   it('les réglages du bot répartissent l’argent investi entre les placements', () => {
     const result = computeProfile(prudent);
     const cfg = configFromProfile({ result, answers: prudent, symbols: ['A', 'B', 'C', 'D'], volatility: {}, capital: 10_000, currency: 'CHF', broker: 'unknown' });
-    assert.equal(cfg.strategy, 'trend');
+    assert.equal(cfg.strategy, 'buy_hold');
     assert.equal(cfg.positionSizePct, 15); // 60 % investis au maximum, répartis sur 4 placements
     assert.equal(cfg.broker, 'yuh');
     assert.equal(cfg.maxLossPct, 5);

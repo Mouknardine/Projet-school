@@ -476,9 +476,11 @@ function ProfileCard({ bot, strategy, equity, lossFloor, brokerName }: { bot: Bo
           <RiskGauge level={level} showLabels className="mt-3 max-w-xs" />
           <p className="mt-4 text-sm leading-relaxed text-ink-2">
             <b className="font-semibold text-ink">Comment il décide : </b>
-            {bot.strategy === 'trend'
-              ? trendExplanation(bot.params.period, bot.params.band)
-              : `Il achète quand ${lowerFirst(strategy.rules.buy)} Il vend quand ${lowerFirst(strategy.rules.sell)}`}
+            {bot.strategy === 'buy_hold'
+              ? profile.howItDecides
+              : bot.strategy === 'trend'
+                ? trendExplanation(bot.params.period, bot.params.band)
+                : `Il achète quand ${lowerFirst(strategy.rules.buy)} Il vend quand ${lowerFirst(strategy.rules.sell)}`}
           </p>
         </div>
         <ul className="space-y-3 text-sm leading-relaxed text-ink-2">
