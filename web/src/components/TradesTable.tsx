@@ -206,6 +206,8 @@ export function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
   const exit = buy ? exitOf(t, trades) : undefined;
   const { strategy, stopLossPct, takeProfitPct } = context;
   const won = (t.pnl ?? 0) > 0;
+  const manual = t.trigger === 'manual';
+  const seller = manual ? 'Ce placement a été' : 'Le bot a';
 
   return (
     <div className="text-sm">
@@ -214,7 +216,7 @@ export function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
         <SideIcon buy={buy} className="size-11 [&_svg]:size-6" />
         <div className="min-w-0">
           <p className="text-lg font-semibold leading-snug text-ink">
-            Le bot a {buy ? 'acheté' : 'vendu'} {fmtQty(t.qty)} {t.symbol} à {fmtPrice(t.price)} {t.currency || currency}
+            {buy ? 'Le bot a acheté' : manual ? 'Vous avez vendu' : 'Le bot a vendu'} {fmtQty(t.qty)} {t.symbol} à {fmtPrice(t.price)} {t.currency || currency}
           </p>
           <p className="mt-0.5 text-xs text-ink-3">
             {name ? `${name} · ` : ''}le {fmtDay(t.time)} à {fmtTime(t.time)}
@@ -234,7 +236,7 @@ export function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
       <Receipt trade={t} currency={currency} />
 
       {/* La raison */}
-      <Section title={buy ? 'Pourquoi le bot a acheté' : 'Pourquoi le bot a vendu'}>
+      <Section title={buy ? 'Pourquoi le bot a acheté' : manual ? 'Pourquoi cette vente' : 'Pourquoi le bot a vendu'}>
         <div className="rounded-xl border border-accent/25 bg-accent/[0.07] p-3.5">
           <Badge tone={trig.tone} className="mb-2">
             <trig.icon aria-hidden /> {trig.long}
@@ -255,8 +257,8 @@ export function TradeDetail({ trade: t, trades, currency, context, onOpen }: {
             </div>
             <p className="mt-1 leading-relaxed text-ink-2">
               {won
-                ? "Le bot a revendu plus cher qu'il n'avait acheté, frais compris."
-                : "Le bot a revendu moins cher qu'il n'avait acheté (frais compris). Ça arrive : aucune stratégie ne gagne à tous les coups, l'important est de gagner plus souvent ou plus gros qu'on ne perd."}
+                ? `${seller} revendu plus cher qu'acheté, frais compris.`
+                : `${seller} revendu moins cher qu'acheté (frais compris). Ça arrive : aucune stratégie ne gagne à tous les coups, l'important est de gagner plus souvent ou plus gros qu'on ne perd.`}
             </p>
             {entry && (
               <ol className="num mt-3 space-y-2 border-t border-line pt-3 text-xs">

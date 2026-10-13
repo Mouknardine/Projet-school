@@ -771,8 +771,18 @@ function Timeline({ detail, trades, logs, now, pending, perPlacement, analysed, 
                   Achètera {symbols.map(nameOf).join(', ').replace(/, ([^,]*)$/, ' et $1')} {when}
                 </p>
                 <p className="mt-0.5 text-sm leading-relaxed text-ink-2">
-                  {symbols.length > 1 ? 'Ces placements sont cotés' : 'Ce placement est coté'} sur {exchangeOf(symbols[0])}, fermée pour l'instant. Le bot y placera environ{' '}
-                  {fmtMoney(perPlacement, cur, 0)} {symbols.length > 1 ? 'chacun' : ''} dès l'ouverture : il n'achète jamais quand une bourse est fermée, car le prix n'est pas connu.
+                  {watchOf(symbols[0])?.marketOpen ? (
+                    <>
+                      {symbols.length > 1 ? 'Leur bourse' : 'Sa bourse'} ({exchangeOf(symbols[0])}) vient d'ouvrir : le bot y place environ {fmtMoney(perPlacement, cur, 0)}
+                      {symbols.length > 1 ? ' chacun' : ''} à sa prochaine vérification.
+                    </>
+                  ) : (
+                    <>
+                      {symbols.length > 1 ? 'Ces placements sont cotés' : 'Ce placement est coté'} sur {exchangeOf(symbols[0])}, fermée pour l'instant. Le bot y placera environ{' '}
+                      {fmtMoney(perPlacement, cur, 0)}
+                      {symbols.length > 1 ? ' chacun' : ''} dès l'ouverture : il n'achète jamais quand une bourse est fermée, car le prix n'est pas connu.
+                    </>
+                  )}
                 </p>
               </TimelineNode>
             ))}
@@ -1062,7 +1072,7 @@ function PlacementDetail({ botId, symbol, name, color, position: p, watch, pendi
             </p>
           </div>
         ) : (
-          <div className="col-span-2 bg-surface px-4 py-3.5 text-sm text-ink-2 sm:col-span-4">Le bot a revendu ce placement. Son historique est dans « Ce que le bot a fait ».</div>
+          <SoldFact trades={chart.data?.trades ?? []} currency={currency} />
         )}
       </div>
 
@@ -1104,6 +1114,22 @@ function PlacementDetail({ botId, symbol, name, color, position: p, watch, pendi
         </p>
       </div>
     </div>
+  );
+}
+
+/** Un placement revendu : qui l'a vendu, quand, à quel prix, et le résultat. */
+function SoldFact({ trades, currency }: { trades: Trade[]; currency: string }) {
+  const sell = [...trades].filter((t) => t.side === 'SELL').sort((a, b) => b.time - a.time)[0];
+  if (!sell) return <div className="col-span-2 bg-surface px-4 py-3.5 text-sm text-ink-2 sm:col-span-4">Ce placement a été revendu.</div>;
+  const who =
+    sell.trigger === 'manual' ? 'Vous l’avez fait vendre' : sell.trigger === 'protection' ? 'Le bot l’a vendu pour respecter votre limite de perte' : 'Le bot l’a vendu';
+  return (
+    <>
+      <Fact label="Vendu le" value={fmtDate(sell.time)} sub={who} />
+      <Fact label="Prix de vente" value={`${fmtPrice(sell.price)} ${sell.currency}`} sub={`${fmtQty(sell.qty)} parts`} />
+      <Fact label="Montant reçu" value={fmtMoney(sell.amount, currency)} sub="frais déduits" />
+      <Fact label="Résultat" value={fmtSignedMoney(sell.pnl, currency)} valueClass={pnlClass(sell.pnl)} sub={`${fmtPct(sell.pnlPct)}, frais compris`} />
+    </>
   );
 }
 

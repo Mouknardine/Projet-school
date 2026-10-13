@@ -344,16 +344,16 @@ export function AssetChart({ bars, quote, trades, color, createdAt, height = 300
 
   // Périodes pendant lesquelles le bot possédait ce placement (d'un achat à la vente suivante, ou jusqu'à maintenant).
   const holds = useMemo(() => {
-    const out: { from: number; to: number; price: number; closed: boolean }[] = [];
+    const out: { from: number; to: number; price: number; exitPrice: number | null; closed: boolean }[] = [];
     let open: Trade | null = null;
     for (const t of sortedTrades) {
       if (t.side === 'BUY' && !open) open = t;
       else if (t.side === 'SELL' && open) {
-        out.push({ from: open.time, to: t.time, price: open.price, closed: true });
+        out.push({ from: open.time, to: t.time, price: open.price, exitPrice: t.price, closed: true });
         open = null;
       }
     }
-    if (open) out.push({ from: open.time, to: tEnd, price: open.price, closed: false });
+    if (open) out.push({ from: open.time, to: tEnd, price: open.price, exitPrice: null, closed: false });
     return out;
   }, [sortedTrades, tEnd]);
 
@@ -488,9 +488,14 @@ export function AssetChart({ bars, quote, trades, color, createdAt, height = 300
 
         {/* Les périodes de possession : zone verte au-dessus du prix d'achat (gain), rouge en dessous (perte) */}
         {holds.map((hd, k) => {
-          const pts = view.filter((p) => p.time >= hd.from - DAY && p.time <= hd.to);
-          const seg = [{ time: Math.max(hd.from, tStart), price: hd.price }, ...pts.filter((p) => p.time > hd.from), ...(hd.closed ? [] : [])];
-          if (seg.length < 2 && !pts.length) return null;
+          if (hd.to < tStart) return null;
+          // Du prix d'achat (ou du début de la période affichée) jusqu'à la vente (ou au dernier cours).
+          const seg = [
+            ...(hd.from >= tStart ? [{ time: hd.from, price: hd.price }] : []),
+            ...view.filter((p) => p.time > hd.from && (hd.closed ? p.time < hd.to : p.time <= hd.to)),
+            ...(hd.exitPrice !== null ? [{ time: hd.to, price: hd.exitPrice }] : []),
+          ];
+          if (seg.length < 2) return null;
           const d = pathOf(seg);
           const yb = y(hd.price);
           const xa = x(seg[0].time);
