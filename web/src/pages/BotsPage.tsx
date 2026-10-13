@@ -166,7 +166,9 @@ export function BotsPage() {
                       ? 'le bot est en pause.'
                       : marketOpen === false
                         ? "la bourse est fermée, il commencera à la prochaine ouverture."
-                        : "il attend le bon moment selon sa stratégie. Ouvrez-le pour voir ce qu'il attend pour chaque action."}
+                        : bot.profile
+                          ? 'il achète ses placements dès que leur bourse est ouverte.'
+                          : "il attend le bon moment selon sa stratégie. Ouvrez-le pour voir ce qu'il attend pour chaque action."}
                   </p>
                 )}
 
@@ -184,12 +186,19 @@ export function BotsPage() {
                     <div className="text-ink-3">Achats / ventes</div>
                     <div className="mt-0.5 text-ink">{summary.tradesCount}</div>
                   </div>
-                  <div>
-                    <div className="text-ink-3">Comparé à « acheter et garder »</div>
-                    <div className={`mt-0.5 ${pnlClass(vsBench)}`}>
-                      {vsBench === null ? '–' : Math.abs(vsBench) < 0.005 ? 'pareil' : `${fmtNum(Math.abs(vsBench))} % ${vsBench > 0 ? 'de mieux' : 'de moins'}`}
+                  {bot.profile ? (
+                    <div>
+                      <div className="text-ink-3">Limite de perte</div>
+                      <div className="mt-0.5 text-ink">{bot.maxLossPct > 0 ? `−${bot.maxLossPct} %` : 'aucune'}</div>
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <div className="text-ink-3">Comparé à « acheter et garder »</div>
+                      <div className={`mt-0.5 ${pnlClass(vsBench)}`}>
+                        {vsBench === null ? '–' : Math.abs(vsBench) < 0.005 ? 'pareil' : `${fmtNum(Math.abs(vsBench))} % ${vsBench > 0 ? 'de mieux' : 'de moins'}`}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <div className="text-ink-3">Lancé le</div>
                     <div className="mt-0.5 text-ink">{fmtDate(bot.createdAt)}</div>
