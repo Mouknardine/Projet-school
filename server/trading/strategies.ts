@@ -62,6 +62,12 @@ export function exitReason(kind: 'stop_loss' | 'take_profit', price: number, ent
     ? `Protection contre les pertes (stop-loss) : le cours est tombé à ${f2(price)}, soit ${pct} par rapport au prix d'achat (${f2(entryPrice)}). La limite était fixée à −${limitPct} % : le bot vend automatiquement pour que la perte ne s'aggrave pas.`
     : `Objectif de gain atteint (take-profit) : le cours est monté à ${f2(price)}, soit ${pct} par rapport au prix d'achat (${f2(entryPrice)}). L'objectif était fixé à +${limitPct} % : le bot vend automatiquement pour encaisser le gain.`;
 }
+/** Explication de la vente de protection, quand le placement a perdu plus que la limite choisie (bot en direct et backtest). */
+export function protectionReason(equity: number, base: number, limitPct: number, currency: string): string {
+  const loss = (1 - equity / base) * 100;
+  return `Limite de perte atteinte : le placement vaut ${equity.toFixed(2)} ${currency}, soit ${loss.toFixed(1)} % de moins que ${base.toFixed(2)} ${currency}. La limite choisie était de −${limitPct} % : le bot vend tout pour protéger le reste de l'argent.`;
+}
+
 const closes = (bars: Bar[]) => bars.map((b) => b.close);
 
 const COLORS = {
@@ -116,6 +122,61 @@ const smaCross: Strategy = {
     return {
       action: 'HOLD',
       reason: `Pas de changement de tendance (toujours ${up ? 'haussière' : 'baissière'}) : ${short} reste ${up ? 'au-dessus du' : 'en dessous du'} ${long}.`,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
+// 1 bis. Suivi de tendance simple (prix au-dessus ou en dessous de sa moyenne)
+// ---------------------------------------------------------------------------
+const trend: Strategy = {
+  info: {
+    id: 'trend',
+    name: 'Suivre la tendance',
+    short: 'Tendance',
+    description:
+      "La règle la plus simple et la plus utilisée pour placer son argent prudemment. Le bot regarde si le prix d'une action est au-dessus de son prix moyen des dernières semaines. Si oui, la tendance est à la hausse : le bot achète (ou garde l'action). Si le prix passe nettement sous sa moyenne, la tendance s'est retournée : le bot vend pour mettre l'argent à l'abri, et attend que la hausse revienne. La marge évite de vendre et racheter sans arrêt quand le prix hésite autour de sa moyenne, ce qui coûterait cher en frais.",
+    rules: {
+      buy: 'Le prix est au-dessus de son prix moyen : la tendance est à la hausse.',
+      sell: "Le prix passe nettement sous son prix moyen (de plus que la marge) : la tendance s'est retournée, le bot met l'argent à l'abri.",
+    },
+    idle: "Cette stratégie achète dès que le prix d'une action est au-dessus de son prix moyen. Si toutes les actions sont en baisse, le bot garde l'argent de côté et attend que la tendance redevienne positive.",
+    params: [
+      { key: 'period', label: 'Période de la moyenne', default: 50, min: 5, max: 250, step: 1, help: 'Nombre de bougies du prix moyen' },
+      { key: 'band', label: 'Marge avant de vendre', default: 2, min: 0, max: 20, step: 0.5, help: 'En % sous la moyenne, pour éviter les allers-retours coûteux' },
+    ],
+  },
+  warmup: (p) => p.period + 1,
+  overlays: (p) => [
+    { key: 'avg', label: `Prix moyen (${p.period})`, pane: 'price', color: COLORS.slow },
+    { key: 'floor', label: `Seuil de vente (−${p.band} %)`, pane: 'price', color: COLORS.band },
+  ],
+  compute: (bars, p) => {
+    const avg = sma(closes(bars), p.period);
+    return { avg, floor: avg.map((v) => (v === null ? null : v * (1 - p.band / 100))) };
+  },
+  signal: ({ bars, series, i, p, interval, hasPosition }) => {
+    const close = bars[i].close;
+    const avg = series.avg[i];
+    if (avg === null) return { action: 'HOLD', reason: "Le prix moyen n'est pas encore calculable." };
+    const floor = avg * (1 - p.band / 100);
+    const mean = `son prix moyen sur ${spanLabel(p.period, interval)} (${f2(avg)})`;
+    if (!hasPosition)
+      return close > avg
+        ? decide('BUY', `La tendance est à la hausse : le prix (${f2(close)}) est au-dessus de ${mean}.`, 'Le bot achète pour profiter de la hausse.')
+        : { action: 'HOLD', reason: `La tendance est à la baisse : le prix (${f2(close)}) est sous ${mean}. Le bot garde l'argent de côté et attend.` };
+    if (close < floor)
+      return decide(
+        'SELL',
+        `La tendance s'est retournée : le prix (${f2(close)}) est passé à plus de ${p.band} % sous ${mean}.`,
+        "Le bot vend pour mettre l'argent à l'abri.",
+      );
+    return {
+      action: 'HOLD',
+      reason:
+        close > avg
+          ? `La tendance reste à la hausse : le prix (${f2(close)}) est au-dessus de ${mean}. Le bot garde l'action.`
+          : `Le prix (${f2(close)}) hésite sous ${mean}, mais sans dépasser la marge de ${p.band} % (seuil de vente : ${f2(floor)}). Le bot garde l'action.`,
     };
   },
 };
@@ -348,6 +409,7 @@ const buyHold: Strategy = {
 };
 
 export const STRATEGIES: Record<StrategyId, Strategy> = {
+  trend,
   sma_cross: smaCross,
   rsi: rsiStrategy,
   macd: macdStrategy,

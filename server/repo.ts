@@ -23,6 +23,10 @@ export interface BotState {
   /** Devise de cotation de chaque action et dernier taux de change vers la devise du compte. */
   currency: Record<string, string>;
   fx: Record<string, number>;
+  /** Valeur de référence pour la limite de perte (le capital de départ, ou la valeur au moment d'une relance). */
+  floorBase?: number;
+  /** Limite de perte atteinte : le bot vend tout, n'achète plus, puis se met en pause. */
+  protection?: { since: number; equity: number; base: number } | null;
 }
 
 export function parseState(raw: unknown): BotState {
@@ -39,6 +43,8 @@ export function parseState(raw: unknown): BotState {
     session: s.session ?? {},
     currency: s.currency ?? {},
     fx: s.fx ?? {},
+    floorBase: s.floorBase,
+    protection: s.protection ?? null,
   };
 }
 
@@ -144,6 +150,8 @@ export function botFromRow(r: Row): Bot {
     feePct: Number(r.fee_pct),
     allowFractional: !!r.allow_fractional,
     broker: r.broker ?? 'simple',
+    maxLossPct: Number(r.max_loss_pct ?? 0),
+    profile: r.profile ? (json(r.profile) as Bot['profile']) : null,
     startPrices: json(r.start_prices),
     startFx: json(r.start_fx ?? '{}') ?? {},
     createdAt: Number(r.started_at),

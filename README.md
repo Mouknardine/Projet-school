@@ -6,7 +6,26 @@ argent réel n'est engagé.
 
 Projet réalisé dans le cadre du TIP « Le trading algorithmique et l'intelligence artificielle en bourse ».
 
+**La question du projet : peut-on investir avec un robot, sans prendre soi-même aucune décision ?** La personne, qui n'y connaît
+rien, répond seulement à un questionnaire. Le bot fait tout le reste : il choisit les actions, décide quand acheter et vendre, et
+protège l'argent selon le risque accepté.
+
 ## Fonctionnalités
+
+- **Questionnaire d'investisseur** (une question par écran, pensé pour le téléphone) : horizon, part de l'épargne, réserve de
+  secours, objectif, réaction à une baisse, perte maximale acceptée, expérience, deux questions de connaissances (avec la bonne
+  réponse expliquée), préférences (Suisse, monde, tech, cryptos), entreprises favorites, montant, devise et banque.
+- **Profil de risque** en 5 niveaux (très prudent → audacieux), calculé comme dans les banques suisses (LSFin) : capacité de risque,
+  tolérance au risque et connaissances ; le plus prudent des trois l'emporte. Les réponses contradictoires sont signalées.
+- **Choix des actions par le bot** : il mesure la volatilité sur un an d'une soixantaine de placements (actions suisses, américaines,
+  européennes, fonds, obligations, or, cryptos) et remplit chaque « case » du profil (très calme, calme, moyen, agité…) avec le
+  placement au meilleur rapport gain / risque, sans plus de deux placements par secteur. Les favoris de la personne sont ajoutés.
+- **Réglages automatiques** selon le profil : stratégie « suivre la tendance » sur bougies d'un jour (peu d'opérations, donc peu de
+  frais), réserve de liquidités, stop-loss, et **limite de perte globale** : si le placement baisse plus que la perte acceptée, le
+  bot vend tout et se met en pause.
+- **Simulation du passé avant de lancer** : le bot rejoue ses règles sur les vrais cours des 2 dernières années, frais compris,
+  et compare avec « acheter et garder ».
+- **Mode expert** (depuis la page « Comprendre ») : créer un bot à la main et tester toutes les stratégies sur le passé.
 
 - **Création de bots** : capital de départ et devise du compte (CHF, EUR ou USD), banque dont le bot paie les tarifs, actions suivies
   (recherche par nom ou listes prêtes : Tech US, SMI, Europe, crypto… ; on peut mélanger les bourses), stratégie et ses paramètres,
@@ -86,6 +105,7 @@ Les ordres ne sont passés que pendant les heures d'ouverture de la bourse de ch
 
 | Stratégie | Type | Achat | Vente |
 |---|---|---|---|
+| Suivre la tendance (utilisée par le questionnaire) | suivi de tendance | clôture au-dessus de sa moyenne mobile | clôture à plus de x % sous la moyenne (marge anti-allers-retours) |
 | Croisement de moyennes mobiles | suivi de tendance | MM courte croise MM longue vers le haut | croisement vers le bas |
 | RSI | retour à la moyenne | RSI < 30 (survendu) | RSI > 70 (suracheté) |
 | MACD | momentum | MACD croise sa ligne de signal vers le haut | croisement vers le bas |
@@ -113,8 +133,9 @@ server/                      Serveur (TypeScript), fonctionne sous Node.js et so
   config.ts                  configuration (variables d'environnement)
   market/yahoo.ts            récupération des cours (Yahoo Finance) + cache
   market/fx.ts               taux de change (Yahoo Finance)
+  market/risk.ts             volatilité et rendement sur un an (choix des actions selon le profil)
   trading/indicators.ts      SMA, EMA, RSI, MACD, Bollinger
-  trading/strategies.ts      les 6 stratégies et leurs explications
+  trading/strategies.ts      les 7 stratégies et leurs explications
   trading/costs.ts           frais réels d'un ordre : courtage des banques, change, droit de timbre, taxes étrangères
   trading/portfolio.ts       taille des ordres, résultat d'une vente
   trading/engine.ts          le bot en direct
@@ -122,6 +143,7 @@ server/                      Serveur (TypeScript), fonctionne sous Node.js et so
   trading/stats.ts           drawdown, volatilité, Sharpe, taux de réussite
   trading/summary.ts         chiffres clés du dashboard
 shared/types.ts              types communs serveur / dashboard
+shared/profile.ts            questionnaire, calcul du profil, choix des actions, réglages du bot par profil
 supabase/                    version en ligne : fonction « api » (Deno), schéma SQL, planificateur
 web/                         Dashboard React (Vite + Tailwind CSS + TradingView Lightweight Charts)
 tests/                       tests automatiques (npm test)
@@ -148,6 +170,7 @@ En ligne, elles sont dans la base Postgres de Supabase.
 | GET | `/api/bots/:id/chart?symbol=` | bougies + indicateurs + trades d'une action |
 | POST | `/api/backtest` | lancer un backtest |
 | GET | `/api/market/search?q=` | rechercher une action |
+| GET | `/api/profile/assets?level=&region=&crypto=&favorites=` | placements choisis par le bot pour un profil (volatilité mesurée sur un an) |
 | GET | `/api/costs/preview?broker=&currency=&amount=&symbols=` | frais réels d'un achat puis d'une revente, aux cours actuels |
 | POST | `/api/cron/tick` | analyse de tous les bots (appelée chaque minute par le planificateur en ligne) |
 

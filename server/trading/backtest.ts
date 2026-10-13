@@ -8,9 +8,9 @@ import type { BacktestResult, Bar, BotConfig, BrokerId, EquityPoint, Trade, Trad
 import { fractionalAllowed, orderCosts } from './costs.ts';
 import { sizeOrder, stopLossPrice, takeProfitPrice } from './portfolio.ts';
 import { closedTradeStats, downsample, maxDrawdownPct, riskMetrics } from './stats.ts';
-import { exitReason, getStrategy, type Signal } from './strategies.ts';
+import { exitReason, getStrategy, protectionReason, type Signal } from './strategies.ts';
 
-type BacktestConfig = Omit<BotConfig, 'name' | 'currency' | 'broker'> & { currency?: string; broker?: BrokerId };
+type BacktestConfig = Omit<BotConfig, 'name' | 'currency' | 'broker' | 'maxLossPct' | 'profile'> & { currency?: string; broker?: BrokerId; maxLossPct?: number };
 
 /** Devise de chaque action et taux de change historique vers la devise du compte (1 si même devise). */
 export interface BacktestFx {
@@ -149,12 +149,21 @@ export function runBacktest(
     });
   };
 
+  // Limite de perte globale : une fois atteinte, le bot vend tout et ne fait plus rien (comme le bot en direct, qui se met en pause).
+  const floor = cfg.maxLossPct ? cfg.initialCapital * (1 - cfg.maxLossPct / 100) : null;
+  let protectionAt: number | null = null;
+
   for (const t of times) {
     for (const s of symbols) {
       const i = indexByTime[s].get(t);
       if (i === undefined) continue;
       const bars = barsBySymbol[s];
       const bar = bars[i];
+      if (protectionAt !== null) {
+        lastPrice[s] = bar.close;
+        lastFx[s] = fxAt(s, t);
+        continue;
+      }
 
       // a) Exécution, à l'ouverture, de l'ordre décidé à la clôture précédente.
       const order = pending.get(s);
@@ -191,6 +200,16 @@ export function runBacktest(
       }
     }
 
+    if (floor !== null && protectionAt === null && positions.size > 0) {
+      const value = portfolioValue();
+      if (value <= floor) {
+        const reason = protectionReason(value, cfg.initialCapital, cfg.maxLossPct as number, account);
+        for (const s of [...positions.keys()]) doSell(s, lastPrice[s], t, 'protection', reason);
+        pending.clear();
+        protectionAt = t;
+      }
+    }
+
     const benchmark = symbols.reduce((a, s) => a + benchUnits[s] * lastPrice[s] * lastFx[s], benchCash);
     equity.push({ time: t, equity: portfolioValue(), cash, benchmark });
     if (positions.size > 0) exposed++;
@@ -206,6 +225,7 @@ export function runBacktest(
   return {
     interval: cfg.interval,
     warmupBars: warmup,
+    protectionAt,
     equity: downsample(equity, 3000),
     trades,
     openPositions: [...positions].map(([symbol, pos]) => ({ symbol, qty: pos.qty, entryPrice: pos.entryPrice, lastPrice: lastPrice[symbol] })),

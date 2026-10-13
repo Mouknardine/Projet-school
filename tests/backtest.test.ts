@@ -8,6 +8,8 @@ import { approx, barsFromCloses } from './helpers.ts';
 const base: Omit<BotConfig, 'name'> = {
   currency: 'USD',
   broker: 'simple',
+  maxLossPct: 0,
+  profile: null,
   initialCapital: 10_000,
   symbols: ['TEST'],
   strategy: 'sma_cross',
@@ -65,6 +67,20 @@ describe('backtest', () => {
     assert.equal(exit.trigger, 'stop_loss');
     assert.ok(approx(exit.price, 90)); // 100 × (1 − 10 %)
     assert.ok(r.stats.totalReturnPct > -10.01);
+  });
+
+  it('la limite de perte globale vend tout et arrête le bot', () => {
+    // Le cours baisse de 1 % par jour : avec une limite de −10 %, le bot doit tout vendre vers −10 % puis ne plus rien faire.
+    const closes = [...Array.from({ length: 5 }, () => 100), ...Array.from({ length: 40 }, (_, i) => 100 * 0.99 ** (i + 1))];
+    const r = runBacktest({ ...base, strategy: 'buy_hold', params: {}, maxLossPct: 10, feePct: 0 }, { TEST: barsFromCloses(closes) });
+    assert.notEqual(r.protectionAt, null);
+    const exit = r.trades.find((t) => t.side === 'SELL');
+    assert.ok(exit);
+    assert.equal(exit.trigger, 'protection');
+    assert.match(exit.reason, /Limite de perte atteinte/);
+    assert.equal(r.trades.filter((t) => t.side === 'BUY').length, 1);
+    // Perte arrêtée juste après −10 %, alors que le cours finit à −33 %.
+    assert.ok(r.stats.totalReturnPct > -11 && r.stats.totalReturnPct <= -10, `${r.stats.totalReturnPct}`);
   });
 
   it('refuse un historique trop court', () => {

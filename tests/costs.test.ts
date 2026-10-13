@@ -37,6 +37,13 @@ describe('frais réels d’un ordre', () => {
     near(c.stamp, 1600 * 0.00075);
   });
 
+  it('un fonds irlandais coté à la bourse suisse paie le timbre des titres étrangers', () => {
+    const c = kinds(orderCosts({ ...base, broker: 'yuh', symbol: 'VWRL.SW', qty: 10, price: 150, quoteCurrency: 'CHF', fxRate: 1 }));
+    near(c.stamp, 1500 * 0.0015);
+    const smi = kinds(orderCosts({ ...base, broker: 'yuh', symbol: 'CSSMI.SW', qty: 10, price: 150, quoteCurrency: 'CHF', fxRate: 1 }));
+    near(smi.stamp, 1500 * 0.00075);
+  });
+
   it('Yuh applique un courtage minimum de 1 CHF', () => {
     const c = kinds(orderCosts({ ...base, broker: 'yuh', symbol: 'NESN.SW', qty: 1, price: 80, quoteCurrency: 'CHF', fxRate: 1 }));
     near(c.commission, 1);

@@ -42,7 +42,8 @@ export function BacktestPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Tester une stratégie sur le passé</h1>
+        <div className="text-xs font-semibold uppercase tracking-wider text-warn">Mode expert</div>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Tester une stratégie sur le passé</h1>
         <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-ink-2">
           Avant de lancer un bot, on peut vérifier ce qu'aurait donné sa stratégie ces derniers mois. L'app rejoue les vrais cours du passé, jour après jour,
           comme si le bot avait tourné à ce moment-là. En finance, on appelle ça un <b className="font-semibold text-ink">backtest</b>.

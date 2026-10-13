@@ -2,6 +2,10 @@
 
 import type { ReactNode } from 'react';
 import { useAppData } from '../App.tsx';
+import { Link } from 'react-router';
+import { BANDS, PROFILES } from '../../../shared/profile.ts';
+import type { RiskLevel } from '../../../shared/types.ts';
+import { LEVEL_COLORS } from '../components/profile.tsx';
 import { Card } from '../components/ui.tsx';
 import { nbsp } from '../lib/format.ts';
 
@@ -21,6 +25,12 @@ const GLOSSARY: { term: string; text: string }[] = [
   { term: 'Bougie', text: 'Le résumé des prix sur une durée (5 min, 1 h, 1 jour…) : prix au début, à la fin, le plus haut et le plus bas.' },
   { term: 'Trade (ordre)', text: 'Un achat ou une vente passé par le bot.' },
   { term: 'Liquidités', text: "L'argent du bot qui n'est pas investi en actions." },
+  { term: 'Profil de risque', text: 'Le niveau de risque qui vous convient, de « Très prudent » à « Audacieux », calculé à partir du questionnaire.' },
+  { term: 'Volatilité (agitation)', text: "De combien le prix d'une action bouge habituellement. Plus elle est agitée, plus elle peut monter… ou baisser." },
+  { term: 'Diversification', text: "Répartir son argent sur plusieurs placements, pour que la chute de l'un ne fasse pas tout perdre." },
+  { term: 'Obligation', text: "Un prêt à un État ou à une entreprise, remboursé avec des intérêts. Plus sûr qu'une action, mais rapporte moins." },
+  { term: 'Fonds (ETF)', text: "Un panier de dizaines ou de centaines d'actions qu'on achète en une seule fois." },
+  { term: 'Limite de perte', text: 'La baisse maximale que vous acceptez : si le placement baisse autant, le bot vend tout pour protéger le reste.' },
   { term: 'Courtage', text: 'Ce que la banque facture pour exécuter un achat ou une vente.' },
   { term: 'Taux de change', text: 'Le prix d’une monnaie dans une autre : par exemple, combien de francs vaut 1 dollar.' },
   { term: 'Droit de timbre', text: 'Un impôt suisse prélevé sur chaque achat et chaque vente de titres passés par une banque suisse.' },
@@ -70,11 +80,78 @@ export function LearnPage() {
             <b className="font-semibold text-ink">argent fictif</b> : personne ne peut rien perdre.
           </p>
           <p>
-            La question à laquelle l'application répond : <b className="font-semibold text-ink">un algorithme fait-il mieux qu'un investisseur qui achète des actions et attend ?</b>{' '}
-            Pour le savoir, chaque bot est comparé à la stratégie « acheter et garder », et chacune de ses décisions est expliquée en français.
+            La question à laquelle l'application répond : <b className="font-semibold text-ink">peut-on investir avec un robot, sans prendre soi-même aucune décision ?</b>{' '}
+            La personne répond seulement à un questionnaire. Le bot fait tout le reste : il choisit les actions, décide quand acheter et vendre, et protège
+            l'argent. Pour juger s'il fait du bon travail, chaque bot est comparé à la stratégie « acheter et garder », et chacune de ses décisions est
+            expliquée en français.
           </p>
         </div>
       </Card>
+
+      <Section title="Du questionnaire au bot">
+        <p>
+          Le questionnaire s'inspire de ceux des banques suisses, qui doivent vérifier qu'un placement convient à leur client (loi sur les services financiers,
+          LSFin). Il mesure trois choses :
+        </p>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Term name="1. La capacité de risque">
+            Ce que votre situation vous permet de perdre : dans combien de temps vous aurez besoin de l'argent, quelle part de vos économies il représente, si
+            vous avez une réserve en cas d'imprévu.
+          </Term>
+          <Term name="2. La tolérance au risque">Ce que vous êtes prêt à supporter : votre objectif, votre réaction face à une baisse, la perte maximale acceptée.</Term>
+          <Term name="3. Les connaissances">Votre expérience et deux petites questions. Un débutant ne reçoit pas un profil plus risqué que « Équilibré ».</Term>
+        </div>
+        <p>
+          <b className="font-semibold text-ink">Le profil retenu est le plus prudent des trois</b> : c'est le maillon le plus faible qui décide. Quelqu'un
+          d'audacieux qui aura besoin de son argent dans six mois reçoit donc un profil très prudent.
+        </p>
+        <div className="-mx-1 overflow-x-auto px-1">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="text-xs text-ink-3">
+              <tr className="border-b border-line">
+                <th className="py-2 pr-3 font-medium">Profil</th>
+                <th className="py-2 pr-3 font-medium">Ce que le bot achète</th>
+                <th className="py-2 pr-3 font-medium">Comment il décide</th>
+                <th className="py-2 pr-3 font-medium">Réserve</th>
+                <th className="py-2 font-medium">Limite de perte</th>
+              </tr>
+            </thead>
+            <tbody>
+              {([1, 2, 3, 4, 5] as RiskLevel[]).map((l) => {
+                const p = PROFILES[l];
+                const kinds = [...new Set(p.slots)].map((b) => BANDS.find((x) => x.id === b)?.label.toLowerCase()).join(', ');
+                return (
+                  <tr key={l} className="border-b border-line align-top last:border-0">
+                    <td className="py-2.5 pr-3 font-semibold whitespace-nowrap" style={{ color: LEVEL_COLORS[l] }}>
+                      {l}. {p.name}
+                    </td>
+                    <td className="py-2.5 pr-3 text-ink-3">
+                      {p.slots.length} placements : {kinds}
+                    </td>
+                    <td className="py-2.5 pr-3 text-ink-3">
+                      {strategies.find((s) => s.id === p.strategy)?.name ?? p.strategy} : moyenne sur {p.params.period} jours, vente {p.params.band}&nbsp;% en dessous
+                    </td>
+                    <td className="py-2.5 pr-3 text-ink-3">{100 - p.maxInvestedPct}&nbsp;%</td>
+                    <td className="py-2.5 text-ink-3">−{p.maxLossPct}&nbsp;%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p>
+          <b className="font-semibold text-ink">Le choix des actions.</b> Le bot télécharge un an de cours pour une soixantaine de placements (actions suisses,
+          américaines et européennes, fonds, obligations, or, cryptos si vous les acceptez) et mesure leur <b className="font-semibold text-ink">volatilité</b> :
+          l'écart-type des variations quotidiennes, ramené sur un an (σ × √252). Il classe chaque placement par agitation (
+          {BANDS.map((b) => b.label.toLowerCase()).join(', ')}), puis remplit chaque « case » du profil avec le placement qui a eu le meilleur rapport
+          gain / risque l'an passé, sans prendre plus de deux placements du même secteur (diversification).
+        </p>
+        <p>
+          <b className="font-semibold text-ink">La limite de perte.</b> À chaque analyse, le bot compare la valeur du placement à la baisse maximale acceptée. Si
+          elle est atteinte, il vend tout et se met en pause : c'est la traduction directe de votre réponse « à partir de quelle baisse ne dormiriez-vous plus
+          tranquille ? ».
+        </p>
+      </Section>
 
       <Card title="Les mots à connaître">
         <dl className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
@@ -257,11 +334,30 @@ export function LearnPage() {
             <b>Surapprentissage</b> : en testant beaucoup de paramètres sur le passé, on finit par trouver une combinaison qui « marche »… par hasard.
           </li>
           <li>
+            Le questionnaire est simplifié par rapport à celui d'une vraie banque, et le passé (volatilité, rendement d'une action) ne prédit pas l'avenir : le
+            choix des actions reste une estimation.
+          </li>
+          <li>
             En Suisse, gérer la fortune de clients (y compris via un robo-advisor) nécessite une autorisation de la FINMA (loi sur les établissements
             financiers, LEFin). Cette application est un outil pédagogique et ne constitue pas un conseil en investissement.
           </li>
         </ul>
       </Section>
+
+      <Card title="Mode expert">
+        <p className="text-sm leading-relaxed text-ink-2">
+          Pour aller plus loin (et pour le dossier du TIP) : régler soi-même un bot sans passer par le questionnaire, ou tester une stratégie sur plusieurs
+          années de cours passés pour comparer les approches.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link to="/bots/new" className="inline-flex h-9 items-center rounded-lg border border-line bg-raised px-3.5 text-sm font-medium text-ink hover:bg-line">
+            Créer un bot à la main
+          </Link>
+          <Link to="/backtest" className="inline-flex h-9 items-center rounded-lg border border-line bg-raised px-3.5 text-sm font-medium text-ink hover:bg-line">
+            Tester une stratégie sur le passé
+          </Link>
+        </div>
+      </Card>
     </div>
   );
 }

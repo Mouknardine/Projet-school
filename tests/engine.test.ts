@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import type { Bar, Quote } from '../shared/types.ts';
 import { createSqliteRepo } from '../server/db-sqlite.ts';
 import type { Repo } from '../server/repo.ts';
-import { benchmarkValue, processSymbol, tickBot } from '../server/trading/engine.ts';
+import { benchmarkValue, checkLossLimit, endProtectionIfDone, processSymbol, tickBot } from '../server/trading/engine.ts';
 import { computeSummary } from '../server/trading/summary.ts';
 import { barsFromCloses } from './helpers.ts';
 
@@ -31,6 +31,8 @@ async function createBot(overrides: Record<string, unknown> = {}) {
       allowFractional: false,
       currency: 'CHF',
       broker: 'simple',
+      maxLossPct: 0,
+      profile: null,
       ...overrides,
     },
     { TEST: 100 },
@@ -160,5 +162,29 @@ describe('moteur du bot en direct', () => {
     assert.equal(pos.lastFx, 0.8);
     const s = await computeSummary(repo, (await repo.getBot(bot.id))!);
     assert.ok(Math.abs(s.positionsValue - 1920) < 1e-6);
+  });
+
+  it('limite de perte : au-delà de la baisse acceptée, le bot vend tout puis se met en pause', async () => {
+    const bot = await createBot({ strategy: 'buy_hold', params: {}, positionSizePct: 100, feePct: 0, stopLossPct: 0, maxLossPct: 10 });
+    const state = await repo.getBotState(bot.id);
+    const now = Date.now();
+    const bars = barsFromCloses([100, 100, 100], now - 4 * HOUR, HOUR);
+    await processSymbol(repo, bot, state, 'TEST', { quote: quote(100, now), bars, fx: 1 }, { now, trade: true });
+    assert.ok(await repo.getPosition(bot.id, 'TEST'));
+
+    // −5 % : rien ne se passe.
+    await processSymbol(repo, bot, state, 'TEST', { quote: quote(95, now + 60_000), bars, fx: 1 }, { now: now + 60_000, trade: true });
+    assert.equal(await checkLossLimit(repo, (await repo.getBot(bot.id))!, state, now + 60_000), false);
+
+    // −12 % : la limite de −10 % est dépassée.
+    await processSymbol(repo, bot, state, 'TEST', { quote: quote(88, now + 120_000), bars, fx: 1 }, { now: now + 120_000, trade: true });
+    assert.equal(await checkLossLimit(repo, (await repo.getBot(bot.id))!, state, now + 120_000), true);
+    await processSymbol(repo, bot, state, 'TEST', { quote: quote(88, now + 180_000), bars, fx: 1 }, { now: now + 180_000, trade: true });
+    const [last] = await repo.listTrades(bot.id);
+    assert.equal(last.side, 'SELL');
+    assert.equal(last.trigger, 'protection');
+    assert.equal(await repo.getPosition(bot.id, 'TEST'), undefined);
+    await endProtectionIfDone(repo, (await repo.getBot(bot.id))!, state, now + 180_000);
+    assert.equal((await repo.getBot(bot.id))!.status, 'paused');
   });
 });

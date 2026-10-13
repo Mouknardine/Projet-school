@@ -23,6 +23,7 @@ const TRIGGERS: Record<TradeTrigger, { chip: string; long: string; icon: typeof 
   stop_loss: { chip: 'Stop-loss', long: 'Vente automatique pour limiter la perte (stop-loss)', icon: ShieldAlert, tone: 'down' },
   take_profit: { chip: 'Objectif atteint', long: 'Vente automatique, objectif de gain atteint (take-profit)', icon: Target, tone: 'up' },
   manual: { chip: 'Vente à la main', long: "Vente demandée à la main, ce n'est pas une décision du bot", icon: Hand, tone: 'neutral' },
+  protection: { chip: 'Limite de perte', long: 'Vente de protection : le placement a perdu plus que la limite choisie', icon: ShieldAlert, tone: 'down' },
 };
 
 const selectClass = 'h-[30px] rounded-lg border border-line bg-page px-2 text-xs text-ink-2 outline-none focus:border-accent';

@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS bots (
   broker            TEXT    NOT NULL DEFAULT 'simple',
   start_prices      TEXT    NOT NULL,
   start_fx          TEXT    NOT NULL DEFAULT '{}',
+  max_loss_pct      REAL    NOT NULL DEFAULT 0,
+  profile           TEXT,
   state             TEXT    NOT NULL DEFAULT '{}',
   started_at        INTEGER NOT NULL,
   last_tick_at      INTEGER,
@@ -112,7 +114,13 @@ export function createSqliteRepo(dbPath: string): Repo {
     const columns = (db.prepare(`PRAGMA table_info(${table})`).all() as Row[]).map((c) => c.name);
     for (const [name, def] of Object.entries(defs)) if (!columns.includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`);
   };
-  addColumns('bots', { lock_until: 'INTEGER', broker: "TEXT NOT NULL DEFAULT 'simple'", start_fx: "TEXT NOT NULL DEFAULT '{}'" });
+  addColumns('bots', {
+    lock_until: 'INTEGER',
+    broker: "TEXT NOT NULL DEFAULT 'simple'",
+    start_fx: "TEXT NOT NULL DEFAULT '{}'",
+    max_loss_pct: 'REAL NOT NULL DEFAULT 0',
+    profile: 'TEXT',
+  });
   addColumns('positions', { currency: "TEXT NOT NULL DEFAULT ''", entry_fx: 'REAL NOT NULL DEFAULT 1', last_fx: 'REAL NOT NULL DEFAULT 1' });
   addColumns('trades', { currency: "TEXT NOT NULL DEFAULT ''", fx_rate: 'REAL NOT NULL DEFAULT 1', costs: 'TEXT' });
 
@@ -132,8 +140,8 @@ export function createSqliteRepo(dbPath: string): Repo {
     async insertBot(cfg: BotConfig, startPrices, startFx, now) {
       const res = run(
         `INSERT INTO bots (name, strategy, params, symbols, interval, currency, initial_capital, cash,
-           position_size_pct, stop_loss_pct, take_profit_pct, fee_pct, allow_fractional, broker, start_prices, start_fx, started_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           position_size_pct, stop_loss_pct, take_profit_pct, fee_pct, allow_fractional, broker, max_loss_pct, profile, start_prices, start_fx, started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         cfg.name,
         cfg.strategy,
         JSON.stringify(cfg.params),
@@ -148,6 +156,8 @@ export function createSqliteRepo(dbPath: string): Repo {
         cfg.feePct,
         cfg.allowFractional ? 1 : 0,
         cfg.broker,
+        cfg.maxLossPct ?? 0,
+        cfg.profile ? JSON.stringify(cfg.profile) : null,
         JSON.stringify(startPrices),
         JSON.stringify(startFx),
         now,

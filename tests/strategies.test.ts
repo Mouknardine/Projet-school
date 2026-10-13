@@ -52,3 +52,30 @@ describe('explications des décisions', () => {
     }
   });
 });
+
+describe('stratégie « Suivre la tendance »', () => {
+  const strategy = getStrategy('trend');
+  const p = normalizeParams('trend', { period: 5, band: 1 });
+  const at = (closes: number[], hasPosition: boolean) => {
+    const bars = barsFromCloses(closes);
+    return strategy.signal({ bars, series: strategy.compute(bars, p), i: bars.length - 1, hasPosition, everHeld: hasPosition, p, interval: '1d' });
+  };
+
+  it('achète dès que le prix est au-dessus de sa moyenne, sans attendre un croisement', () => {
+    const s = at([100, 101, 102, 103, 104, 105, 106], false);
+    assert.equal(s.action, 'BUY');
+    assert.match(s.reason, /au-dessus de son prix moyen sur 5 jours de bourse/);
+  });
+
+  it('garde l’action tant que la tendance monte, puis la vend quand le prix passe nettement sous sa moyenne', () => {
+    assert.equal(at([100, 101, 102, 103, 104, 105, 106], true).action, 'HOLD');
+    // Juste sous la moyenne (102), mais pas de plus de 1 % : on garde, pour éviter un aller-retour coûteux.
+    const hesitates = at([102, 102, 102, 102, 102, 102, 101.5], true);
+    assert.equal(hesitates.action, 'HOLD');
+    assert.match(hesitates.reason, /sans dépasser la marge de 1 %/);
+    const sell = at([106, 105, 104, 103, 102, 101, 100], true);
+    assert.equal(sell.action, 'SELL');
+    assert.match(sell.reason, /mettre l'argent à l'abri/);
+    assert.equal(at([106, 105, 104, 103, 102, 101, 100], false).action, 'HOLD');
+  });
+});

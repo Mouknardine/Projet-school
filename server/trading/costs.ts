@@ -32,6 +32,12 @@ export function marketOf(symbol: string): Market {
  * Sociétés cotées à Paris mais dont le siège n'est pas en France : elles ne paient pas la TTF.
  * (Simplification : on applique la TTF à toutes les autres actions de Paris, sans vérifier le seuil d'1 Md€.)
  */
+/**
+ * Fonds cotés à la bourse suisse mais domiciliés à l'étranger (Irlande) : pour le droit de timbre, ce sont des titres
+ * étrangers (0,15 %), même s'ils s'achètent en Suisse.
+ */
+const FOREIGN_FUNDS_ON_SIX = new Set(['VWRL.SW', 'CSSPX.SW', 'CSNDX.SW', 'SWDA.SW', 'EIMI.SW', 'AGGH.SW']);
+
 const NOT_FRENCH_ON_PARIS = new Set(['AIR.PA', 'STLAP.PA', 'STMPA.PA', 'MT.PA', 'ERF.PA']);
 
 const STAMP_CH = 0.075;
@@ -283,8 +289,9 @@ export function orderCosts(i: CostInput): { lines: CostLine[]; total: number } {
 
   // 3. Droit de timbre fédéral (seulement chez un courtier suisse, à l'achat et à la vente)
   if (b.swiss) {
-    const rate = market === 'CH' ? STAMP_CH : STAMP_FOREIGN;
-    add('stamp', 'Droit de timbre suisse', (valueAccount * rate) / 100, `${pct(rate)} (titre ${market === 'CH' ? 'suisse' : 'étranger'}), impôt fédéral`);
+    const swissTitle = market === 'CH' && !FOREIGN_FUNDS_ON_SIX.has(i.symbol.toUpperCase());
+    const rate = swissTitle ? STAMP_CH : STAMP_FOREIGN;
+    add('stamp', 'Droit de timbre suisse', (valueAccount * rate) / 100, `${pct(rate)} (titre ${swissTitle ? 'suisse' : 'étranger'}), impôt fédéral`);
   }
 
   // 4. Taxes étrangères

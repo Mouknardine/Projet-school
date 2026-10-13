@@ -4,8 +4,8 @@
 export type Interval = '5m' | '15m' | '1h' | '1d';
 export type Side = 'BUY' | 'SELL';
 export type BotStatus = 'running' | 'paused';
-export type StrategyId = 'sma_cross' | 'rsi' | 'macd' | 'bollinger' | 'score' | 'buy_hold';
-export type TradeTrigger = 'signal' | 'stop_loss' | 'take_profit' | 'manual';
+export type StrategyId = 'trend' | 'sma_cross' | 'rsi' | 'macd' | 'bollinger' | 'score' | 'buy_hold';
+export type TradeTrigger = 'signal' | 'stop_loss' | 'take_profit' | 'manual' | 'protection';
 export type LogLevel = 'info' | 'signal' | 'trade' | 'warn' | 'error';
 /** Banque ou courtier dont le bot applique les vrais tarifs (« simple » = un pourcentage fixe choisi à la main). */
 export type BrokerId = 'swissquote' | 'postfinance' | 'yuh' | 'ibkr' | 'simple';
@@ -128,6 +128,25 @@ export interface BotConfig {
   currency: AccountCurrency | string;
   /** Courtier dont le bot applique les tarifs réels. */
   broker: BrokerId;
+  /**
+   * Limite de perte globale (en %) : si la valeur du placement baisse de plus que ce pourcentage,
+   * le bot vend tout pour protéger le reste de l'argent, puis se met en pause. 0 = pas de limite.
+   */
+  maxLossPct: number;
+  /** Résultat du questionnaire qui a servi à régler le bot (absent pour un bot réglé à la main). */
+  profile: BotProfile | null;
+}
+
+/** Niveau de risque d'un investisseur, de 1 (très prudent) à 5 (audacieux). */
+export type RiskLevel = 1 | 2 | 3 | 4 | 5;
+
+/** Ce qu'on garde du questionnaire avec le bot, pour expliquer ses réglages. */
+export interface BotProfile {
+  level: RiskLevel;
+  /** Réponses données (identifiant de la question → identifiant de la réponse). */
+  answers: Record<string, string>;
+  /** Agitation mesurée de chaque action au moment du choix (volatilité annuelle, en %). */
+  volatility: Record<string, number>;
 }
 
 export interface Bot extends BotConfig {
@@ -268,6 +287,10 @@ export interface BotDetail {
   positions: Position[];
   strategy: StrategyInfo;
   watchlist: WatchItem[];
+  /** Limite de perte globale : en dessous de cette valeur, le bot vend tout (null si pas de limite). */
+  lossFloor: number | null;
+  /** Limite atteinte : depuis quand, et la valeur du placement à ce moment-là. */
+  protection: { since: number; equity: number; base: number } | null;
 }
 
 export interface Quote {
@@ -327,6 +350,8 @@ export interface BacktestResult {
   interval: Interval;
   range: string;
   warmupBars: number;
+  /** Moment où la limite de perte globale a été atteinte (le bot a tout vendu), ou null. */
+  protectionAt: number | null;
   equity: EquityPoint[];
   trades: Omit<Trade, 'id' | 'botId'>[];
   openPositions: { symbol: string; qty: number; entryPrice: number; lastPrice: number }[];

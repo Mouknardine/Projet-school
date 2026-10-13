@@ -1,18 +1,20 @@
-// Page d'accueil : liste des bots et leurs performances.
+// Page d'accueil : à quoi sert l'application, puis la liste des placements et leurs résultats.
 
-import { Bot as BotIcon, BookOpen, ChartNoAxesCombined, MessageSquareText, Plus, Wallet } from 'lucide-react';
+import { BookOpen, ClipboardList, MessageSquareText, Sparkles, Wallet } from 'lucide-react';
 import { Link } from 'react-router';
 import { useAppData } from '../App.tsx';
 import { SERIES, Sparkline } from '../components/charts.tsx';
+import { ProfileBadge } from '../components/profile.tsx';
 import { Badge, Delta, EmptyState, ErrorBox, LiveDot, Spinner } from '../components/ui.tsx';
+import { assetInfo } from '../../../shared/profile.ts';
 import { api } from '../lib/api.ts';
 import { fmtDate, fmtMoney, fmtNum, fmtSignedMoney, pnlClass } from '../lib/format.ts';
 import { usePolling } from '../lib/usePolling.ts';
 
 const STEPS = [
-  { icon: Wallet, title: 'On lui donne un capital', text: 'On choisit la somme de départ (fictive), les actions à suivre et une stratégie.' },
-  { icon: ChartNoAxesCombined, title: 'Il décide tout seul', text: 'Le bot analyse les vrais cours chaque minute et achète ou vend selon ses règles.' },
-  { icon: MessageSquareText, title: 'Il explique tout', text: 'Chaque achat et chaque vente est enregistré avec la raison de la décision et son résultat.' },
+  { icon: ClipboardList, title: 'Vous répondez à quelques questions', text: 'Sur votre situation et le risque que vous acceptez. Environ 3 minutes.' },
+  { icon: Sparkles, title: 'Le bot choisit et investit', text: 'Il en déduit votre profil, choisit lui-même les actions et achète ou vend tout seul, sur les vrais cours.' },
+  { icon: MessageSquareText, title: 'Vous suivez, sans rien décider', text: 'Graphiques à l’appui, chaque achat et chaque vente est expliqué en français.' },
 ];
 
 export function BotsPage() {
@@ -28,15 +30,29 @@ export function BotsPage() {
       {/* À quoi sert l'application */}
       <section className="overflow-hidden rounded-3xl border border-line bg-[radial-gradient(120%_120%_at_0%_0%,rgba(57,135,229,0.16),transparent_55%)] bg-surface p-5 sm:p-7">
         <h1 className="max-w-3xl text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
-          Des robots qui investissent en bourse, avec de l'argent fictif
+          Placez votre argent, un robot s'occupe du reste
         </h1>
         <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-ink-2">
-          Chaque bot reçoit un capital de départ et suit les <b className="font-semibold text-ink">vrais cours de la bourse</b>. Il décide tout seul d'acheter ou de
-          vendre des actions grâce à sa stratégie, et il explique chacune de ses décisions.
+          Pas besoin d'y connaître quoi que ce soit. Le bot s'adapte à ce que vous acceptez de risquer, choisit les actions à votre place et les achète ou les
+          vend tout seul sur les <b className="font-semibold text-ink">vrais cours de la bourse</b>, avec de l'<b className="font-semibold text-ink">argent fictif</b>.
         </p>
         <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-ink">
-          <b className="font-semibold">Le but :</b> vérifier si un algorithme fait mieux que simplement acheter des actions et attendre.
+          <b className="font-semibold">La question du projet :</b> peut-on investir avec un robot, sans prendre soi-même aucune décision ?
         </p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Link
+            to="/investir"
+            className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-accent px-5 text-[15px] font-semibold text-white hover:bg-[#4a94ea] [&_svg]:size-4"
+          >
+            <Sparkles aria-hidden /> Commencer
+          </Link>
+          <Link
+            to="/apprendre"
+            className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-line bg-raised px-4 text-sm font-medium text-ink hover:bg-line [&_svg]:size-4"
+          >
+            <BookOpen aria-hidden /> Comment ça marche ?
+          </Link>
+        </div>
         <ol className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {STEPS.map(({ icon: Icon, title, text }, i) => (
             <li key={title} className="flex gap-3 rounded-2xl border border-line bg-page/50 p-3.5">
@@ -52,25 +68,11 @@ export function BotsPage() {
             </li>
           ))}
         </ol>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Link
-            to="/bots/new"
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-[#4a94ea] [&_svg]:size-4"
-          >
-            <Plus aria-hidden /> Créer un bot
-          </Link>
-          <Link
-            to="/apprendre"
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-line bg-raised px-4 text-sm font-medium text-ink hover:bg-line [&_svg]:size-4"
-          >
-            <BookOpen aria-hidden /> Comment ça marche ?
-          </Link>
-        </div>
       </section>
 
       <div>
-        <h2 className="text-xl font-semibold tracking-tight text-ink">Mes bots</h2>
-        <p className="mt-1 text-sm text-ink-3">Touchez un bot pour voir ce qu'il possède, ses trades et pourquoi il les a faits.</p>
+        <h2 className="text-xl font-semibold tracking-tight text-ink">Mes placements</h2>
+        <p className="mt-1 text-sm text-ink-3">Touchez un placement pour voir ce que le bot a acheté, sur un graphique, et pourquoi.</p>
       </div>
 
       {error && <ErrorBox>{error}</ErrorBox>}
@@ -79,7 +81,7 @@ export function BotsPage() {
       {data && data.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-line bg-surface px-4 py-3.5 sm:px-5 sm:py-4">
-            <div className="text-xs font-medium text-ink-3">Bots actifs</div>
+            <div className="text-xs font-medium text-ink-3">Placements actifs</div>
             <div className="mt-1 text-2xl font-semibold text-ink">
               {running} <span className="text-base font-normal text-ink-3">sur {data.length}</span>
             </div>
@@ -89,7 +91,7 @@ export function BotsPage() {
             <div className="mt-1 text-2xl font-semibold text-ink">{totalTrades}</div>
           </div>
           <div className="col-span-2 min-w-0 rounded-2xl border border-line bg-surface px-4 py-3.5 sm:col-span-1 sm:px-5 sm:py-4">
-            <div className="text-xs font-medium text-ink-3">Meilleur bot pour l'instant</div>
+            <div className="text-xs font-medium text-ink-3">Meilleur placement pour l'instant</div>
             <div className="mt-1 flex items-center gap-2">
               <span className="truncate text-2xl font-semibold text-ink">{best?.bot.name}</span>
               <Delta value={best?.summary.pnlPct} />
@@ -100,15 +102,12 @@ export function BotsPage() {
 
       {data && data.length === 0 && (
         <div className="rounded-2xl border border-line bg-surface">
-          <EmptyState icon={<BotIcon />} title="Aucun bot pour l'instant">
-            Créez votre premier bot : choisissez un capital, des actions et une stratégie. Il commencera à trader dès l'ouverture de la bourse.
+          <EmptyState icon={<Wallet />} title="Aucun placement pour l'instant">
+            Répondez au questionnaire : le bot choisira les actions qui vous correspondent et commencera à investir dès l'ouverture de la bourse.
           </EmptyState>
           <div className="flex justify-center gap-3 pb-10">
-            <Link to="/bots/new" className="inline-flex h-9 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-[#4a94ea]">
-              Créer un bot
-            </Link>
-            <Link to="/backtest" className="inline-flex h-9 items-center rounded-lg border border-line px-4 text-sm text-ink-2 hover:bg-raised">
-              Tester une stratégie sur le passé
+            <Link to="/investir" className="inline-flex h-10 items-center rounded-lg bg-accent px-5 text-sm font-semibold text-white hover:bg-[#4a94ea]">
+              Commencer
             </Link>
           </div>
         </div>
@@ -136,7 +135,11 @@ export function BotsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-semibold leading-snug text-ink">{bot.name}</div>
-                    <div className="mt-0.5 text-xs text-ink-3">Stratégie : {strategyName(bot.strategy)}</div>
+                    {bot.profile ? (
+                      <ProfileBadge level={bot.profile.level} className="mt-1.5" />
+                    ) : (
+                      <div className="mt-0.5 text-xs text-ink-3">Réglé à la main · stratégie : {strategyName(bot.strategy)}</div>
+                    )}
                   </div>
                   <Badge tone={status.tone} className="shrink-0">
                     <LiveDot on={running && !!marketOpen} />
@@ -171,7 +174,7 @@ export function BotsPage() {
                   {bot.symbols.map((s, i) => (
                     <span key={s} className="inline-flex items-center gap-1 rounded-md bg-raised px-1.5 py-0.5 text-[11px] font-medium text-ink-2">
                       <span className="size-1.5 rounded-full" style={{ background: SERIES[i % SERIES.length] }} />
-                      {s}
+                      {assetInfo(s)?.name ?? s}
                     </span>
                   ))}
                 </div>
@@ -182,8 +185,10 @@ export function BotsPage() {
                     <div className="mt-0.5 text-ink">{summary.tradesCount}</div>
                   </div>
                   <div>
-                    <div className="text-ink-3">vs acheter et garder</div>
-                    <div className={`mt-0.5 ${pnlClass(vsBench)}`}>{vsBench === null ? '–' : `${vsBench > 0 ? '+' : ''}${fmtNum(vsBench)} pts`}</div>
+                    <div className="text-ink-3">Comparé à « acheter et garder »</div>
+                    <div className={`mt-0.5 ${pnlClass(vsBench)}`}>
+                      {vsBench === null ? '–' : Math.abs(vsBench) < 0.005 ? 'pareil' : `${fmtNum(Math.abs(vsBench))} % ${vsBench > 0 ? 'de mieux' : 'de moins'}`}
+                    </div>
                   </div>
                   <div>
                     <div className="text-ink-3">Lancé le</div>

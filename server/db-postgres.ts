@@ -37,6 +37,8 @@ create table if not exists bots (
   broker            text             not null default 'simple',
   start_prices      jsonb            not null,
   start_fx          jsonb            not null default '{}'::jsonb,
+  max_loss_pct      double precision not null default 0,
+  profile           jsonb,
   state             jsonb            not null default '{}'::jsonb,
   started_at        bigint           not null,
   last_tick_at      bigint,
@@ -102,6 +104,8 @@ create index if not exists logs_bot_id on logs(bot_id, id);
 -- Colonnes ajoutées après la première version (devises, change et détail des frais).
 alter table bots add column if not exists broker text not null default 'simple';
 alter table bots add column if not exists start_fx jsonb not null default '{}'::jsonb;
+alter table bots add column if not exists max_loss_pct double precision not null default 0;
+alter table bots add column if not exists profile jsonb;
 alter table positions add column if not exists currency text not null default '';
 alter table positions add column if not exists entry_fx double precision not null default 1;
 alter table positions add column if not exists last_fx double precision not null default 1;
@@ -137,10 +141,11 @@ export function createPostgresRepo(sql: Sql): Repo {
     async insertBot(cfg: BotConfig, startPrices, startFx, now) {
       const [row] = await sql`
         insert into bots (name, strategy, params, symbols, "interval", currency, initial_capital, cash,
-          position_size_pct, stop_loss_pct, take_profit_pct, fee_pct, allow_fractional, broker, start_prices, start_fx, started_at)
+          position_size_pct, stop_loss_pct, take_profit_pct, fee_pct, allow_fractional, broker, max_loss_pct, profile, start_prices, start_fx, started_at)
         values (${cfg.name}, ${cfg.strategy}, ${json(cfg.params)}::jsonb, ${json(cfg.symbols)}::jsonb, ${cfg.interval}, ${cfg.currency},
           ${cfg.initialCapital}, ${cfg.initialCapital}, ${cfg.positionSizePct}, ${cfg.stopLossPct}, ${cfg.takeProfitPct},
-          ${cfg.feePct}, ${cfg.allowFractional}, ${cfg.broker}, ${json(startPrices)}::jsonb, ${json(startFx)}::jsonb, ${now})
+          ${cfg.feePct}, ${cfg.allowFractional}, ${cfg.broker}, ${cfg.maxLossPct ?? 0}, ${cfg.profile ? json(cfg.profile) : null}::jsonb,
+          ${json(startPrices)}::jsonb, ${json(startFx)}::jsonb, ${now})
         returning id`;
       return Number(row.id);
     },

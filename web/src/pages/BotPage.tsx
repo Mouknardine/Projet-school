@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   ArrowUpRight,
+  ChevronDown,
   CircleX,
   Clock,
   Coins,
@@ -31,23 +32,26 @@ import { Link, useNavigate, useParams } from 'react-router';
 import type { Bot, BotDetail, BotSummary, BrokerInfo, LogEntry, LogLevel, Position, StrategyInfo, WatchItem } from '../../../shared/types.ts';
 import { useAppData } from '../App.tsx';
 import { AllocationBar, COLORS, PerformanceChart, PriceChart, RiskTrack, SERIES, Sparkline } from '../components/charts.tsx';
+import { LEVEL_COLORS, ProfileBadge, RiskGauge } from '../components/profile.tsx';
 import { TradesTable } from '../components/TradesTable.tsx';
+import { assetInfo, PROFILES, QUESTIONS, trendExplanation } from '../../../shared/profile.ts';
 import { Badge, Button, Card, cx, Delta, EmptyState, ErrorBox, LiveDot, Segmented, Spinner, StatTile } from '../components/ui.tsx';
 import { api } from '../lib/api.ts';
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum, fmtPct, fmtPrice, fmtQty, fmtRelative, fmtSession, fmtSignedMoney, pnlClass } from '../lib/format.ts';
 import { useNow, usePolling } from '../lib/usePolling.ts';
+
+const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
 
 const INTERVAL_LABEL: Record<string, string> = { '5m': '5 minutes', '15m': '15 minutes', '1h': '1 heure', '1d': '1 jour' };
 
 /** Les parties de la page, pour s'y rendre directement depuis le sommaire. */
 const SECTIONS = [
   { id: 'resume', label: 'Résumé' },
-  { id: 'strategie', label: 'Sa stratégie' },
+  { id: 'profil', label: 'Profil et protections' },
   { id: 'portefeuille', label: "Ce qu'il possède" },
-  { id: 'trades', label: 'Ses trades' },
-  { id: 'graphique', label: 'Graphique' },
-  { id: 'statistiques', label: 'Statistiques' },
-  { id: 'journal', label: 'Journal' },
+  { id: 'graphique', label: 'Graphique des achats' },
+  { id: 'trades', label: 'Ses décisions' },
+  { id: 'details', label: 'Pour les curieux' },
   { id: 'gerer', label: 'Gérer' },
 ];
 
@@ -85,7 +89,8 @@ export function BotPage() {
   if (detail.error && !detail.data) return <ErrorBox>{detail.error}</ErrorBox>;
   if (!detail.data) return <Spinner />;
 
-  const { bot, summary, positions, strategy, watchlist } = detail.data;
+  const { bot, summary, positions, strategy, watchlist, lossFloor, protection } = detail.data;
+  const broker = config.brokers?.find((b) => b.id === bot.broker);
   const cur = bot.currency;
   const colorOf = (s: string) => SERIES[Math.max(0, bot.symbols.indexOf(s)) % SERIES.length];
   const nameOf = (s: string) => watchlist.find((w) => w.symbol === s)?.name ?? null;
@@ -104,7 +109,7 @@ export function BotPage() {
       {/* En-tête */}
       <div>
         <Link to="/" className="inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2 [&_svg]:size-4">
-          <ArrowLeft aria-hidden /> Tous mes bots
+          <ArrowLeft aria-hidden /> Mes placements
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{bot.name}</h1>
@@ -112,6 +117,7 @@ export function BotPage() {
             <LiveDot on={bot.status === 'running' && anyOpen} />
             {status.label}
           </Badge>
+          {bot.profile && <ProfileBadge level={bot.profile.level} className="py-1" />}
         </div>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-2">{status.text}</p>
         <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-ink-3">
@@ -137,6 +143,19 @@ export function BotPage() {
       </nav>
 
       {actionError && <ErrorBox>{actionError}</ErrorBox>}
+      {protection && (
+        <div className="flex gap-3 rounded-2xl border border-warn/40 bg-warn/10 p-4 text-sm leading-relaxed text-ink-2">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-warn" aria-hidden />
+          <div>
+            <div className="font-semibold text-ink">Limite de perte atteinte le {fmtDateTime(protection.since)}</div>
+            <p className="mt-0.5">
+              Le placement était descendu à {fmtMoney(protection.equity, cur)}, soit {fmtNum((1 - protection.equity / protection.base) * 100, 1)}&nbsp;% de moins que{' '}
+              {fmtMoney(protection.base, cur)}. Comme prévu, le bot {positions.length ? 'vend toutes ses actions dès que leur bourse ouvre' : 'a tout vendu pour protéger votre argent'}
+              {bot.status === 'paused' ? ' et s’est mis en pause. Vous pouvez le relancer plus bas, dans « Gérer ».' : '.'}
+            </p>
+          </div>
+        </div>
+      )}
       {bot.lastError && <ErrorBox>Problème lors de la dernière analyse : {bot.lastError}</ErrorBox>}
 
       {/* Résumé + évolution */}
@@ -147,8 +166,14 @@ export function BotPage() {
         </Card>
       </div>
 
-      {/* Stratégie */}
-      <StrategyCard bot={bot} strategy={strategy} tickSeconds={config.tickSeconds} broker={config.brokers?.find((b) => b.id === bot.broker)} />
+      {/* Profil et protections (ou la stratégie, pour un bot réglé à la main) */}
+      {bot.profile ? (
+        <ProfileCard bot={bot} strategy={strategy} equity={summary.equity} lossFloor={lossFloor} brokerName={broker?.name} />
+      ) : (
+        <div id="profil" className="scroll-mt-20">
+          <StrategyCard bot={bot} strategy={strategy} tickSeconds={config.tickSeconds} broker={broker} />
+        </div>
+      )}
 
       {/* Portefeuille */}
       <Card
@@ -203,11 +228,44 @@ export function BotPage() {
         </div>
       </Card>
 
+      {/* Actions suivies + graphique */}
+      <section id="graphique" className="scroll-mt-20 space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-ink">Où le bot a acheté et vendu</h2>
+          <p className="mt-0.5 text-xs text-ink-3">Chaque placement suivi par le bot, son cours et ce que le bot en pense. Touchez-en un pour voir son graphique.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+          {watchlist.map((w) => (
+            <WatchCard
+              key={w.symbol}
+              now={now}
+              item={w}
+              color={colorOf(w.symbol)}
+              held={positions.some((p) => p.symbol === w.symbol)}
+              active={w.symbol === selected}
+              onSelect={() => {
+                setSymbol(w.symbol);
+                document.getElementById('graphique-cours')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            />
+          ))}
+        </div>
+        <SymbolChart
+          botId={bot.id}
+          symbols={bot.symbols}
+          symbol={selected}
+          onSymbol={setSymbol}
+          tradesVersion={summary.tradesCount}
+          interval={bot.interval}
+          simple={!!bot.profile}
+        />
+      </section>
+
       {/* Trades */}
       <Card
         id="trades"
-        title="Les trades du bot, et pourquoi il les a faits"
-        subtitle="Touchez un trade pour lire l'explication complète."
+        title="Ses décisions : chaque achat et chaque vente, expliqués"
+        subtitle="Touchez une décision pour lire l'explication complète et voir les frais."
         actions={
           <a
             href={api.csvUrl(bot.id)}
@@ -230,39 +288,24 @@ export function BotPage() {
         )}
       </Card>
 
-      {/* Actions suivies + graphique */}
-      <section id="graphique" className="scroll-mt-20 space-y-3">
-        <div>
-          <h2 className="text-base font-semibold text-ink">Les actions que le bot surveille</h2>
-          <p className="mt-0.5 text-xs text-ink-3">Pour chacune : son cours et ce que le bot en pense. Touchez une action pour afficher son graphique.</p>
+      {/* Détails techniques, repliés : utiles pour comprendre en profondeur, mais pas nécessaires pour suivre son placement. */}
+      <details id="details" className="group scroll-mt-20 rounded-2xl border border-line bg-surface">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-sm font-semibold text-ink">Pour les curieux</span>
+            <span className="mt-0.5 block text-xs text-ink-3">Statistiques détaillées, règle exacte de la stratégie et journal de tout ce que le bot a fait.</span>
+          </span>
+          <ChevronDown className="size-4 shrink-0 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="space-y-5 border-t border-line p-3 sm:p-5">
+          {bot.profile && <StrategyCard bot={bot} strategy={strategy} tickSeconds={config.tickSeconds} broker={broker} />}
+          <Stats bot={bot} summary={summary} brokerName={broker?.name} />
+          <Journal logs={logs.data} />
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-          {watchlist.map((w) => (
-            <WatchCard
-              key={w.symbol}
-              now={now}
-              item={w}
-              color={colorOf(w.symbol)}
-              held={positions.some((p) => p.symbol === w.symbol)}
-              active={w.symbol === selected}
-              onSelect={() => {
-                setSymbol(w.symbol);
-                document.getElementById('graphique-cours')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-            />
-          ))}
-        </div>
-        <SymbolChart botId={bot.id} symbols={bot.symbols} symbol={selected} onSymbol={setSymbol} tradesVersion={summary.tradesCount} interval={bot.interval} />
-      </section>
-
-      {/* Statistiques */}
-      <Stats bot={bot} summary={summary} brokerName={config.brokers?.find((b) => b.id === bot.broker)?.name} />
-
-      {/* Journal */}
-      <Journal logs={logs.data} />
+      </details>
 
       {/* Gestion */}
-      <Card id="gerer" title="Gérer ce bot" subtitle="Ces actions demandent le mot de passe administrateur.">
+      <Card id="gerer" title="Gérer ce placement" subtitle="Ces actions demandent le mot de passe administrateur.">
         <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <ManageAction
             button={
@@ -409,6 +452,106 @@ function Summary({ bot, summary, positions, marketOpen, className }: {
         </p>
       </div>
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Profil et protections (placement créé avec le questionnaire)
+// ---------------------------------------------------------------------------
+
+function ProfileCard({ bot, strategy, equity, lossFloor, brokerName }: { bot: Bot; strategy: StrategyInfo; equity: number; lossFloor: number | null; brokerName?: string }) {
+  const level = bot.profile!.level;
+  const profile = PROFILES[level];
+  const cur = bot.currency;
+  const invested = Math.min(100, bot.positionSizePct * bot.symbols.length);
+  const answers = bot.profile!.answers;
+  return (
+    <Card id="profil" title="Votre profil et vos protections" subtitle="Le bot a été réglé à partir de vos réponses au questionnaire.">
+      <div className="grid gap-5 md:grid-cols-2">
+        <div>
+          <div className="text-2xl font-semibold tracking-tight" style={{ color: LEVEL_COLORS[level] }}>
+            {profile.name}
+          </div>
+          <p className="mt-0.5 text-sm text-ink-2">{profile.tagline}</p>
+          <RiskGauge level={level} showLabels className="mt-3 max-w-xs" />
+          <p className="mt-4 text-sm leading-relaxed text-ink-2">
+            <b className="font-semibold text-ink">Comment il décide : </b>
+            {bot.strategy === 'trend'
+              ? trendExplanation(bot.params.period, bot.params.band)
+              : `Il achète quand ${lowerFirst(strategy.rules.buy)} Il vend quand ${lowerFirst(strategy.rules.sell)}`}
+          </p>
+        </div>
+        <ul className="space-y-3 text-sm leading-relaxed text-ink-2">
+          {lossFloor !== null && (
+            <li className="rounded-xl bg-page/60 p-3.5">
+              <div className="flex items-center gap-1.5 font-semibold text-ink [&_svg]:size-4">
+                <ShieldCheck className="text-accent-text" aria-hidden /> Limite de perte : {fmtMoney(lossFloor, cur, 0)}
+              </div>
+              <p className="mt-1">
+                Si votre placement descend sous ce montant (−{bot.maxLossPct}&nbsp;%), le bot vend tout et se met en pause. Aujourd'hui, il vaut{' '}
+                {fmtMoney(equity, cur, 0)} :{' '}
+                {equity > lossFloor ? (
+                  <>
+                    encore <b className="font-semibold text-ink">{fmtMoney(equity - lossFloor, cur, 0)}</b> de marge.
+                  </>
+                ) : (
+                  <b className="font-semibold text-warn">la limite est atteinte.</b>
+                )}
+              </p>
+              <LossBar floor={lossFloor} base={lossFloor / (1 - bot.maxLossPct / 100)} value={equity} />
+            </li>
+          )}
+          {bot.stopLossPct > 0 && (
+            <li>
+              <b className="font-semibold text-ink">Pour chaque action : </b>
+              il la revend si elle baisse de {bot.stopLossPct}&nbsp;% après l'achat
+              {bot.takeProfitPct > 0 ? `, et encaisse le gain si elle monte de ${bot.takeProfitPct} %` : ''}.
+            </li>
+          )}
+          {invested < 100 && (
+            <li>
+              <b className="font-semibold text-ink">Une réserve : </b>
+              il garde toujours au moins {100 - invested}&nbsp;% de votre argent de côté, sans l'investir.
+            </li>
+          )}
+          <li>
+            <b className="font-semibold text-ink">Les frais : </b>
+            ceux de {brokerName ?? 'votre banque'} (courtage, change, droit de timbre), payés à chaque achat et chaque vente.
+          </li>
+        </ul>
+      </div>
+      <details className="group mt-4 rounded-xl border border-line">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 text-sm font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
+          Revoir mes réponses au questionnaire
+          <ChevronDown className="size-4 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <dl className="grid gap-x-6 gap-y-2.5 border-t border-line px-3.5 py-3 text-sm sm:grid-cols-2">
+          {QUESTIONS.filter((q) => answers[q.id]).map((q) => (
+            <div key={q.id}>
+              <dt className="text-xs text-ink-3">{q.title}</dt>
+              <dd className="text-ink">{q.options.find((o) => o.id === answers[q.id])?.label ?? answers[q.id]}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+    </Card>
+  );
+}
+
+/** Barre « marge avant la limite de perte » : de la limite (à gauche) à la valeur de départ (à droite). */
+function LossBar({ floor, base, value }: { floor: number; base: number; value: number }) {
+  const top = Math.max(base, value);
+  const pos = Math.min(1, Math.max(0, (value - floor) / (top - floor || 1)));
+  return (
+    <div className="mt-3" aria-hidden>
+      <div className="relative h-2 rounded-full" style={{ background: 'linear-gradient(90deg, #f6465db3, #fab21999, #2ebd85b3)' }}>
+        <span className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-ink" style={{ left: `${pos * 100}%` }} />
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] text-ink-3">
+        <span>limite</span>
+        <span>départ</span>
+      </div>
+    </div>
   );
 }
 
@@ -694,15 +837,20 @@ function WatchCard({ item, color, held, active, now, onSelect }: {
   );
 }
 
-function SymbolChart({ botId, symbols, symbol, onSymbol, tradesVersion, interval }: {
+function SymbolChart({ botId, symbols, symbol, onSymbol, tradesVersion, interval, simple }: {
   botId: number;
   symbols: string[];
   symbol: string;
   onSymbol: (s: string) => void;
   tradesVersion: number;
   interval: string;
+  /** Pour un débutant : les calculs de la stratégie (moyennes, RSI…) sont masqués au départ. */
+  simple: boolean;
 }) {
   const chart = usePolling(() => api.chart(botId, symbol), [botId, symbol, tradesVersion], 60_000);
+  const [showCalc, setShowCalc] = useState(!simple);
+  const overlays = showCalc ? (chart.data?.overlays ?? []) : [];
+  const label = (s: string) => assetInfo(s)?.name ?? s;
   const q = chart.data?.quote;
   const change = q && q.previousClose ? (q.price / q.previousClose - 1) * 100 : null;
 
@@ -710,7 +858,7 @@ function SymbolChart({ botId, symbols, symbol, onSymbol, tradesVersion, interval
     <div id="graphique-cours" className="scroll-mt-20 min-w-0 rounded-2xl border border-line bg-surface">
       <header className="flex flex-wrap items-start justify-between gap-4 px-5 pt-4 pb-2">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-ink">Graphique : le cours de {symbol} et les décisions du bot</h3>
+          <h3 className="text-sm font-semibold text-ink">Le prix de {label(symbol)} et les achats / ventes du bot</h3>
           {q ? (
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-2xl font-semibold tracking-tight text-ink">
@@ -726,23 +874,37 @@ function SymbolChart({ botId, symbols, symbol, onSymbol, tradesVersion, interval
             <div className="mt-2 h-8" />
           )}
         </div>
-        {symbols.length > 1 && <Segmented value={symbol} onChange={onSymbol} items={symbols.map((s) => ({ id: s, label: s }))} />}
+        {symbols.length > 1 && <Segmented value={symbol} onChange={onSymbol} items={symbols.map((s) => ({ id: s, label: label(s) }))} />}
       </header>
-      <p className="px-5 pb-2 text-xs leading-relaxed text-ink-3">
-        Chaque bâton (« bougie ») résume le prix sur {INTERVAL_LABEL[interval]} : vert si le prix a monté, rouge s'il a baissé. Les flèches montrent les
-        achats (▲ sous la bougie) et les ventes (▼ au-dessus). Les lignes de couleur sont les indicateurs que la stratégie utilise pour décider.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 pb-2">
+        <p className="max-w-3xl text-xs leading-relaxed text-ink-3">
+          Chaque bâton résume le prix sur {INTERVAL_LABEL[interval]} : <span className="text-up">vert</span> si le prix a monté,{' '}
+          <span className="text-down">rouge</span> s'il a baissé. Les flèches montrent les <b className="font-semibold text-ink-2">achats (▲ en dessous)</b> et
+          les <b className="font-semibold text-ink-2">ventes (▼ au-dessus)</b>.
+          {showCalc && ' Les lignes de couleur sont les calculs que le bot utilise pour décider.'}
+        </p>
+        {(chart.data?.overlays.length ?? 0) > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowCalc(!showCalc)}
+            aria-pressed={showCalc}
+            className="inline-flex h-8 shrink-0 items-center rounded-lg border border-line px-2.5 text-xs font-medium text-ink-2 hover:bg-raised hover:text-ink"
+          >
+            {showCalc ? 'Masquer les calculs du bot' : 'Voir les calculs du bot'}
+          </button>
+        )}
+      </div>
       <div className="px-3 pb-4 sm:px-5">
         {chart.error && !chart.data && <ErrorBox>{chart.error}</ErrorBox>}
         {!chart.data && !chart.error && <Spinner />}
         {chart.data && (
           <PriceChart
             bars={chart.data.bars}
-            overlays={chart.data.overlays}
+            overlays={overlays}
             series={chart.data.series}
             trades={chart.data.trades}
             interval={chart.data.interval}
-            height={chart.data.overlays.some((o) => o.pane === 'oscillator') ? 440 : 380}
+            height={overlays.some((o) => o.pane === 'oscillator') ? 440 : 380}
             initialBars={120}
           />
         )}

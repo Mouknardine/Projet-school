@@ -20,14 +20,17 @@ import {
   type Interval,
   type LogLevel,
   type Quote,
+  type RiskLevel,
   type StrategyId,
 } from '../shared/types.ts';
 import { fxAt, getFxHistory, getFxRate } from './market/fx.ts';
+import { measureAssets } from './market/risk.ts';
+import { candidatePool, pickAssets, type AssetSuggestion } from '../shared/profile.ts';
 import { getChart, getQuote, MarketDataError, RANGE_LABELS, RANGES, rangeFor, searchSymbols } from './market/yahoo.ts';
 import type { Repo } from './repo.ts';
 import { BacktestError, runBacktest } from './trading/backtest.ts';
 import { BROKER_IDS, BROKER_LIST, brokerName, costsSummary, fractionalAllowed, orderCosts } from './trading/costs.ts';
-import { sell, tickAllBots, tickBot } from './trading/engine.ts';
+import { currentEquity, sell, tickAllBots, tickBot } from './trading/engine.ts';
 import { sizeOrder } from './trading/portfolio.ts';
 import { downsample } from './trading/stats.ts';
 import { getStrategy, normalizeParams, STRATEGIES, STRATEGY_IDS } from './trading/strategies.ts';
@@ -86,6 +89,16 @@ const configSchema = z.object({
   /** Devise du compte. Par défaut : la devise des actions si elles en ont toutes une seule, sinon le franc suisse. */
   currency: z.enum(ACCOUNT_CURRENCIES).optional(),
   broker: z.enum(BROKER_IDS as [BrokerId, ...BrokerId[]]).optional().default('simple'),
+  maxLossPct: z.number().min(0).max(90).optional().default(0),
+  profile: z
+    .object({
+      level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+      answers: z.record(z.string().max(40), z.string().max(200)),
+      volatility: z.record(z.string().max(20), z.number()),
+    })
+    .nullable()
+    .optional()
+    .default(null),
 });
 const createBotSchema = configSchema.extend({ name: z.string().trim().min(1).max(60) });
 const backtestSchema = configSchema.extend({ range: z.string() });
@@ -214,7 +227,16 @@ export function createApi(deps: AppDeps): Hono {
         session: state.session[symbol] ?? null,
       };
     });
-    return { bot, summary: await computeSummary(repo, bot, positions), positions, strategy: getStrategy(bot.strategy).info, watchlist };
+    const lossFloor = bot.maxLossPct > 0 ? (state.floorBase ?? bot.initialCapital) * (1 - bot.maxLossPct / 100) : null;
+    return {
+      bot,
+      summary: await computeSummary(repo, bot, positions),
+      positions,
+      strategy: getStrategy(bot.strategy).info,
+      watchlist,
+      lossFloor,
+      protection: state.protection ?? null,
+    };
   };
 
   api.get('/config', async (c) => {
@@ -256,6 +278,25 @@ export function createApi(deps: AppDeps): Hono {
       if (err instanceof MarketDataError) throw new HttpError(404, err.message);
       throw err;
     }
+  });
+
+  // Choix des placements pour un profil : le bot mesure l'agitation de chaque action sur un an et prend celles qui correspondent.
+  const assetsSchema = z.object({
+    level: z.coerce.number().int().min(1).max(5),
+    region: z.enum(['ch', 'world', 'tech', 'any']),
+    crypto: z.enum(['0', '1']).optional().default('0'),
+    favorites: z.string().max(200).optional().default(''),
+  });
+  api.get('/profile/assets', async (c) => {
+    const parsed = assetsSchema.safeParse(c.req.query());
+    if (!parsed.success) throw new HttpError(400, parsed.error.issues.map((i) => i.message).join(' ; '));
+    const level = parsed.data.level as RiskLevel;
+    const favorites = [...new Set(parsed.data.favorites.toUpperCase().split(','))].filter((s) => /^[A-Z0-9.\-=^]{1,20}$/.test(s)).slice(0, 3);
+    const pool = candidatePool(parsed.data.region, parsed.data.crypto === '1' && level >= 4).map((x) => x.symbol);
+    const symbols = [...new Set([...favorites, ...pool])];
+    const { measured, errors } = await measureAssets(symbols);
+    const body: AssetSuggestion = { picked: pickAssets(level, measured, favorites), analysed: measured.length, errors };
+    return c.json(body);
   });
 
   // Aperçu des frais réels : ce que coûterait aujourd'hui un achat (puis sa revente) de chaque action choisie.
@@ -350,6 +391,21 @@ export function createApi(deps: AppDeps): Hono {
     if (body.status && body.status !== bot.status) {
       await repo.setBotStatus(bot.id, body.status);
       await repo.insertLog(bot.id, 'info', null, body.status === 'paused' ? 'Bot mis en pause : plus aucun ordre ne sera passé' : 'Bot relancé');
+      // Relance après la limite de perte : la limite repart de la valeur actuelle du placement.
+      const state = await repo.getBotState(bot.id);
+      if (body.status === 'running' && state.protection) {
+        const equity = await currentEquity(repo, bot.id, bot.cash);
+        state.protection = null;
+        state.floorBase = equity;
+        await repo.saveBotState(bot.id, state);
+        const floor = equity * (1 - bot.maxLossPct / 100);
+        await repo.insertLog(
+          bot.id,
+          'info',
+          null,
+          `Nouvelle limite de perte : le bot repart de ${equity.toFixed(2)} ${bot.currency} et vendra tout si le placement descend sous ${floor.toFixed(2)} ${bot.currency} (−${bot.maxLossPct} %).`,
+        );
+      }
     }
     return c.json(await botDetail(bot.id));
   });

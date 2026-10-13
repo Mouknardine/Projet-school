@@ -16,6 +16,7 @@ import type {
   SymbolSearchResult,
   Trade,
 } from '../../../shared/types.ts';
+import type { AssetSuggestion } from '../../../shared/profile.ts';
 
 const PASSWORD_KEY = 'tradebot.adminPassword';
 
@@ -86,6 +87,11 @@ export const api = {
   config: () => request<AppConfig>('GET', '/config'),
   strategies: () => request<StrategyInfo[]>('GET', '/strategies'),
   search: (q: string) => request<SymbolSearchResult[]>('GET', `/market/search?q=${encodeURIComponent(q)}`),
+  profileAssets: (p: { level: number; region: string; crypto: boolean; favorites: string[] }) =>
+    request<AssetSuggestion>(
+      'GET',
+      `/profile/assets?${new URLSearchParams({ level: String(p.level), region: p.region, crypto: p.crypto ? '1' : '0', favorites: p.favorites.join(',') })}`,
+    ),
   costPreview: (p: { broker: string; currency: string; amount: number; feePct: number; fractional: boolean; symbols: string[] }) =>
     request<CostPreview>(
       'GET',

@@ -37,12 +37,16 @@ export function NewBotPage() {
   return (
     <form onSubmit={submit} className="mx-auto max-w-4xl space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Créer un bot</h1>
+        <div className="text-xs font-semibold uppercase tracking-wider text-warn">Mode expert</div>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Créer un bot à la main</h1>
         <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
           Répondez aux 6 questions ci-dessous. Le bot démarre tout de suite : il suit les vrais cours et achète ou vend avec de l'argent fictif, pendant les heures
           d'ouverture de la bourse.
         </p>
-        <p className="mt-1.5 text-sm text-ink-3">Pas sûr de votre stratégie ? Testez-la d'abord sur le passé avec l'onglet « Tester ».</p>
+        <p className="mt-1.5 text-sm text-ink-3">
+          Vous débutez ? Le <a href="/investir" className="text-accent-text hover:underline">questionnaire</a> règle tout pour vous. Pas sûr de votre stratégie ?{' '}
+          <a href="/backtest" className="text-accent-text hover:underline">Testez-la d'abord sur le passé</a>.
+        </p>
       </div>
 
       <Card>

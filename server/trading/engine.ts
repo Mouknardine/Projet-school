@@ -5,13 +5,13 @@
 //   4. exécute l'ordre simulé (achat / vente) et l'enregistre dans l'historique avec sa justification ;
 //   5. enregistre la valeur du portefeuille pour la courbe de performance.
 
-import type { Bot } from '../../shared/types.ts';
+import type { Bot, TradeTrigger } from '../../shared/types.ts';
 import { getFxRate } from '../market/fx.ts';
 import { closedBars, getChart, rangeFor, type ChartData } from '../market/yahoo.ts';
 import type { BotState, PositionRow, Repo } from '../repo.ts';
 import { costsSummary, fractionalAllowed, orderCosts } from './costs.ts';
 import { sizeOrder, stopLossPrice, takeProfitPrice } from './portfolio.ts';
-import { exitReason, getStrategy } from './strategies.ts';
+import { exitReason, getStrategy, protectionReason } from './strategies.ts';
 
 const money = (n: number, currency: string) => `${n.toFixed(2)} ${currency}`;
 const qtyStr = (q: number) => (Number.isInteger(q) ? String(q) : q.toFixed(4));
@@ -112,7 +112,7 @@ export async function sell(
   bot: Bot,
   position: PositionRow,
   mp: MarketPrice,
-  trigger: 'signal' | 'stop_loss' | 'take_profit' | 'manual',
+  trigger: TradeTrigger,
   reason: string,
   now: number,
 ): Promise<void> {
@@ -207,6 +207,17 @@ export async function processSymbol(
   }
   // On ne passe des ordres que pendant les heures d'ouverture de la bourse.
   if (!quote.marketOpen || !opts.trade) return;
+
+  // 0. Limite de perte atteinte : le bot vend tout ce qu'il possède et n'achète plus rien.
+  if (state.protection) {
+    const held = await repo.getPosition(bot.id, symbol);
+    if (held) {
+      const reason = protectionReason(state.protection.equity, state.protection.base, bot.maxLossPct, bot.currency);
+      await sell(repo, bot, held, mp, 'protection', reason, now);
+      think(`Vendu pour protéger votre argent. ${reason}`);
+    } else think("Limite de perte atteinte : le bot n'achète plus rien et garde l'argent à l'abri.");
+    return;
+  }
 
   // 1. Gestion du risque : stop-loss et take-profit, vérifiés à chaque tick avec le dernier cours.
   let position = await repo.getPosition(bot.id, symbol);
@@ -312,6 +323,39 @@ export function benchmarkValue(
   return total;
 }
 
+/** Limite de perte globale : si le placement a trop baissé, le bot passe en mode protection (il va tout vendre). */
+export async function checkLossLimit(repo: Repo, bot: Bot, state: BotState, now: number): Promise<boolean> {
+  if (bot.status !== 'running' || !(bot.maxLossPct > 0) || state.protection) return false;
+  if ((await repo.getPositions(bot.id)).length === 0) return false;
+  const equity = await currentEquity(repo, bot.id, bot.cash);
+  const base = state.floorBase ?? bot.initialCapital;
+  if (equity > base * (1 - bot.maxLossPct / 100)) return false;
+  state.protection = { since: now, equity, base };
+  await repo.insertLog(
+    bot.id,
+    'warn',
+    null,
+    `${protectionReason(equity, base, bot.maxLossPct, bot.currency)} Il vend ses actions dès que leur bourse est ouverte, puis se met en pause.`,
+    now,
+  );
+  return true;
+}
+
+/** Protection terminée : tout est vendu, le bot se met en pause et l'argent reste à l'abri. */
+export async function endProtectionIfDone(repo: Repo, bot: Bot, state: BotState, now: number): Promise<void> {
+  if (!state.protection || bot.status !== 'running') return;
+  if ((await repo.getPositions(bot.id)).length > 0) return;
+  const cash = (await repo.getBot(bot.id))!.cash;
+  await repo.setBotStatus(bot.id, 'paused');
+  await repo.insertLog(
+    bot.id,
+    'warn',
+    null,
+    `Toutes les actions sont vendues : le bot se met en pause. Votre argent (${money(cash, bot.currency)}) est à l'abri, en liquidités. Vous pouvez le relancer quand vous voulez.`,
+    now,
+  );
+}
+
 const SNAPSHOT_WHEN_CLOSED_MS = 30 * 60_000;
 const LOCK_TTL_MS = 2 * 60_000;
 
@@ -327,6 +371,8 @@ export async function tickBot(repo: Repo, botId: number, opts: { force?: boolean
     const range = rangeFor(bot.interval, strategy.warmup(bot.params) + 5);
     const errors: string[] = [];
     let anyOpen = false;
+
+    await checkLossLimit(repo, bot, state, Date.now());
 
     // Les cours de toutes les actions sont téléchargés en parallèle, puis traités un par un.
     const charts = await Promise.allSettled(bot.symbols.map((s) => getChart(s, bot.interval, range)));
@@ -353,6 +399,7 @@ export async function tickBot(repo: Repo, botId: number, opts: { force?: boolean
         errors.push(`${symbol} : ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    await endProtectionIfDone(repo, bot, state, Date.now());
     await repo.saveBotState(botId, state);
 
     const now = Date.now();

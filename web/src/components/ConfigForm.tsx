@@ -27,6 +27,8 @@ export const DEFAULT_CONFIG: ConfigValue = {
   allowFractional: true,
   currency: 'CHF',
   broker: 'yuh',
+  maxLossPct: 0,
+  profile: null,
 };
 
 const CURRENCY_LABELS: Record<string, string> = { CHF: 'Franc suisse', EUR: 'Euro', USD: 'Dollar US' };

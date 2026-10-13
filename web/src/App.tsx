@@ -1,4 +1,4 @@
-import { BookOpen, FlaskConical, LayoutDashboard, Plus } from 'lucide-react';
+import { BookOpen, Sparkles, Wallet } from 'lucide-react';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Link, NavLink, Route, Routes, useLocation } from 'react-router';
 import type { AppConfig, StrategyInfo } from '../../shared/types.ts';
@@ -8,6 +8,7 @@ import { usePolling } from './lib/usePolling.ts';
 import { BacktestPage } from './pages/BacktestPage.tsx';
 import { BotPage } from './pages/BotPage.tsx';
 import { BotsPage } from './pages/BotsPage.tsx';
+import { InvestPage } from './pages/InvestPage.tsx';
 import { LearnPage } from './pages/LearnPage.tsx';
 import { NewBotPage } from './pages/NewBotPage.tsx';
 
@@ -31,9 +32,8 @@ function Logo() {
 
 /** Les menus, avec un libellé court (barre du bas sur mobile) et un libellé complet (barre latérale). */
 const NAV = [
-  { to: '/', short: 'Mes bots', label: 'Mes bots', icon: LayoutDashboard, end: true },
-  { to: '/bots/new', short: 'Nouveau bot', label: 'Créer un bot', icon: Plus, end: true },
-  { to: '/backtest', short: 'Tester', label: 'Tester sur le passé', icon: FlaskConical, end: false },
+  { to: '/', short: 'Mes placements', label: 'Mes placements', icon: Wallet, end: true },
+  { to: '/investir', short: 'Investir', label: 'Nouveau placement', icon: Sparkles, end: true },
   { to: '/apprendre', short: 'Comprendre', label: 'Comment ça marche', icon: BookOpen, end: false },
 ];
 
@@ -46,7 +46,7 @@ function SidebarBots() {
   const { data } = usePolling(() => api.bots(), [], 20_000);
   return (
     <div className="mt-6">
-      <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">Mes bots en cours</div>
+      <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">Mes placements</div>
       <ul className="space-y-0.5">
         {(data ?? []).map(({ bot, summary }) => (
           <li key={bot.id}>
@@ -62,7 +62,7 @@ function SidebarBots() {
             </NavLink>
           </li>
         ))}
-        {data && data.length === 0 && <li className="px-3 py-2 text-xs text-ink-3">Aucun bot pour l'instant</li>}
+        {data && data.length === 0 && <li className="px-3 py-2 text-xs text-ink-3">Aucun placement pour l'instant</li>}
       </ul>
     </div>
   );
@@ -83,7 +83,7 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
           <Logo />
           <span>
             <span className="block text-[15px] font-bold leading-tight tracking-tight text-ink">TradeBot</span>
-            <span className="block text-[11px] text-ink-3">Trading algorithmique · TIP</span>
+            <span className="block text-[11px] text-ink-3">Un robot investit pour vous · TIP</span>
           </span>
         </Link>
         <nav className="mt-7 space-y-0.5" aria-label="Menu principal">
@@ -110,7 +110,7 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
             <Logo />
             <span>
               <span className="block text-[15px] font-bold leading-tight tracking-tight text-ink">TradeBot</span>
-              <span className="block text-[11px] leading-tight text-ink-3">Robots de trading · projet TIP</span>
+              <span className="block text-[11px] leading-tight text-ink-3">Un robot investit pour vous</span>
             </span>
           </Link>
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-warn/30 bg-warn/10 px-2.5 py-1 text-[11px] font-medium text-warn">
@@ -121,7 +121,7 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
 
       {/* Barre d'onglets du bas (mobile / tablette) : chaque menu a une icône ET un nom. */}
       <nav aria-label="Menu principal" className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
-        <ul className="mx-auto grid max-w-xl grid-cols-4">
+        <ul className="mx-auto grid max-w-md grid-cols-3">
           {NAV.map(({ to, short, icon: Icon, end }) => (
             <li key={to}>
               <NavLink
@@ -185,6 +185,7 @@ export function App() {
           <AppDataContext.Provider value={data}>
             <Routes>
               <Route path="/" element={<BotsPage />} />
+              <Route path="/investir" element={<InvestPage />} />
               <Route path="/bots/new" element={<NewBotPage />} />
               <Route path="/bots/:id" element={<BotPage />} />
               <Route path="/backtest" element={<BacktestPage />} />
