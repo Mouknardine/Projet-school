@@ -1053,7 +1053,7 @@ function PlacementDetail({ botId, symbol, name, color, position: p, watch, pendi
       <div className="grid grid-cols-2 gap-px border-b border-line bg-line sm:grid-cols-4">
         {p ? (
           <>
-            <Fact label="Acheté le" value={fmtDate(p.openedAt)} sub={new Date(p.openedAt).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })} />
+            <Fact label="Acheté le" value={fmtDate(p.openedAt)} sub={`à ${swissTime(p.openedAt)}`} />
             <Fact label="Prix d'achat" value={`${fmtPrice(p.entryPrice)} ${p.currency}`} sub={`${fmtQty(p.qty)} parts`} />
             <Fact label="Vaut aujourd'hui" value={fmtMoney(p.marketValue, currency)} sub={`${fmtNum((p.marketValue / equity) * 100, 0)} % de votre argent`} />
             <Fact
@@ -1415,7 +1415,7 @@ function ShareBar({ label, pct, color, amount, delay }: { label: string; pct: nu
       <span className="h-2.5 overflow-hidden rounded-full bg-raised">
         <span className="grow-right block h-full rounded-full" style={{ width: `${pct}%`, background: color, animationDelay: `${delay}ms` }} />
       </span>
-      <span className="num w-24 text-right text-ink">
+      <span className="num whitespace-nowrap text-right text-ink">
         {pct} % <span className="text-ink-3">· {amount}</span>
       </span>
     </div>
