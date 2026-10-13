@@ -286,15 +286,17 @@ export function createApi(deps: AppDeps): Hono {
     region: z.enum(['ch', 'world', 'tech', 'any']),
     crypto: z.enum(['0', '1']).optional().default('0'),
     favorites: z.string().max(200).optional().default(''),
+    currency: z.enum(ACCOUNT_CURRENCIES).optional().default('CHF'),
   });
   api.get('/profile/assets', async (c) => {
     const parsed = assetsSchema.safeParse(c.req.query());
     if (!parsed.success) throw new HttpError(400, parsed.error.issues.map((i) => i.message).join(' ; '));
     const level = parsed.data.level as RiskLevel;
     const favorites = [...new Set(parsed.data.favorites.toUpperCase().split(','))].filter((s) => /^[A-Z0-9.\-=^]{1,20}$/.test(s)).slice(0, 3);
-    const pool = candidatePool(parsed.data.region, parsed.data.crypto === '1' && level >= 4).map((x) => x.symbol);
+    const currency = parsed.data.currency;
+    const pool = candidatePool(parsed.data.region, parsed.data.crypto === '1' && level >= 4, { level, currency }).map((x) => x.symbol);
     const symbols = [...new Set([...favorites, ...pool])];
-    const { measured, errors } = await measureAssets(symbols);
+    const { measured, errors } = await measureAssets(symbols, { accountCurrency: currency });
     const body: AssetSuggestion = { picked: pickAssets(level, measured, favorites), analysed: measured.length, errors };
     return c.json(body);
   });
@@ -323,10 +325,12 @@ export function createApi(deps: AppDeps): Hono {
     const valid = (s: string) => /^[A-Z0-9.\-=^]{1,20}$/.test(s);
     const favorites = [...new Set(input.favorites.map((s) => s.toUpperCase()))].filter(valid).slice(0, 3);
     const exclude = new Set(input.exclude.map((s) => s.toUpperCase()));
-    const pool = [...new Set([...favorites, ...candidatePool(input.region, input.crypto && level >= 4).map((x) => x.symbol)])].filter((s) => !exclude.has(s));
+    const pool = [...new Set([...favorites, ...candidatePool(input.region, input.crypto && level >= 4, { level, currency: input.currency }).map((x) => x.symbol)])].filter(
+      (s) => !exclude.has(s),
+    );
 
-    // 1. Ce que le bot aurait choisi à la date de départ, avec les cours de l'année d'avant uniquement.
-    const { measured } = await measureAssets(pool, { asOf: start });
+    // 1. Ce que le bot aurait choisi à la date de départ, avec les cours de l'année d'avant uniquement (en monnaie du compte).
+    const { measured } = await measureAssets(pool, { asOf: start, accountCurrency: input.currency });
     const picked = pickAssets(level, measured, favorites);
     if (picked.length === 0) throw new HttpError(400, "Pas assez d'historique de cours pour simuler ce profil.");
 

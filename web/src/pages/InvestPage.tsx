@@ -9,6 +9,7 @@ import {
   BROKER_ANSWERS,
   computeProfile,
   configFromProfile,
+  LOCAL_CURRENCY_MAX_LEVEL,
   PROFILES,
   QUESTIONS,
   type Answers,
@@ -452,13 +453,13 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
     setAssets(null);
     setAssetsError(null);
     api
-      .profileAssets({ level: result.level, region, crypto, favorites: favoritesKey ? favoritesKey.split(',') : [] })
+      .profileAssets({ level: result.level, region, crypto, favorites: favoritesKey ? favoritesKey.split(',') : [], currency: draft.currency })
       .then((r) => !cancelled && setAssets(r))
       .catch((err) => !cancelled && setAssetsError(err instanceof Error ? err.message : String(err)));
     return () => {
       cancelled = true;
     };
-  }, [result.level, region, crypto, favoritesKey]);
+  }, [result.level, region, crypto, favoritesKey, draft.currency]);
 
   const picked = (assets?.picked ?? []).filter((p) => !removed.includes(p.symbol));
   const brokerName = config.brokers?.find((b) => b.id === (draft.broker === 'unknown' ? 'yuh' : draft.broker))?.name ?? 'Yuh';
@@ -580,10 +581,19 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
         title="Les placements choisis par le bot"
         subtitle={
           assets
-            ? `Il a mesuré les variations de prix de ${assets.analysed} placements sur l'année passée et gardé ceux qui correspondent à votre profil.`
+            ? `Il a mesuré les variations de ${assets.analysed} placements sur l'année passée, en ${draft.currency}, et gardé ceux qui correspondent à votre profil.`
             : "Le bot mesure les variations de prix des actions sur l'année passée…"
         }
       >
+        {assets && result.level <= LOCAL_CURRENCY_MAX_LEVEL && (
+          <p className="mb-3 flex gap-2 rounded-xl bg-accent/10 px-3.5 py-2.5 text-sm leading-relaxed text-ink-2">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-text" aria-hidden />
+            <span>
+              Comme votre profil est prudent, le bot ne choisit que des placements en {draft.currency} : pas de risque de change (si le dollar baisse, vous ne
+              perdez rien), et pas de frais de change.
+            </span>
+          </p>
+        )}
         {assetsError && <ErrorBox>Impossible d'analyser les actions : {assetsError}</ErrorBox>}
         {!assets && !assetsError && <AnalysisLoader />}
         {assets && (

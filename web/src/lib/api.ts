@@ -87,10 +87,10 @@ export const api = {
   config: () => request<AppConfig>('GET', '/config'),
   strategies: () => request<StrategyInfo[]>('GET', '/strategies'),
   search: (q: string) => request<SymbolSearchResult[]>('GET', `/market/search?q=${encodeURIComponent(q)}`),
-  profileAssets: (p: { level: number; region: string; crypto: boolean; favorites: string[] }) =>
+  profileAssets: (p: { level: number; region: string; crypto: boolean; favorites: string[]; currency: string }) =>
     request<AssetSuggestion>(
       'GET',
-      `/profile/assets?${new URLSearchParams({ level: String(p.level), region: p.region, crypto: p.crypto ? '1' : '0', favorites: p.favorites.join(',') })}`,
+      `/profile/assets?${new URLSearchParams({ level: String(p.level), region: p.region, crypto: p.crypto ? '1' : '0', favorites: p.favorites.join(','), currency: p.currency })}`,
     ),
   simulateProfile: (p: {
     level: number;

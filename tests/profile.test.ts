@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { bandOf, candidatePool, computeProfile, configFromProfile, pickAssets, PROFILES, QUESTIONS, type Answers, type MeasuredAsset } from '../shared/profile.ts';
+import { bandOf, candidatePool, quoteCurrencyOf, computeProfile, configFromProfile, pickAssets, PROFILES, QUESTIONS, type Answers, type MeasuredAsset } from '../shared/profile.ts';
 import { measureRisk, yearBefore } from '../server/market/risk.ts';
 import { getStrategy, normalizeParams } from '../server/trading/strategies.ts';
 import { barsFromCloses } from './helpers.ts';
@@ -138,6 +138,17 @@ describe('choix des actions selon le risque mesuré', () => {
     assert.equal(picked[0].favorite, true);
     assert.equal(picked[0].tooRisky, true);
     assert.equal(picked.length, PROFILES[1].slots.length);
+  });
+
+  it('un profil prudent ne reçoit que des placements dans la monnaie de son compte', () => {
+    const chf = candidatePool('world', false, { level: 2, currency: 'CHF' });
+    assert.ok(chf.length >= 6);
+    assert.ok(chf.every((x) => x.currency === 'CHF'));
+    assert.ok(candidatePool('world', false, { level: 1, currency: 'USD' }).every((x) => x.currency === 'USD'));
+    // À partir du profil équilibré, la préférence de la personne est respectée (avec le change compris dans la mesure du risque).
+    assert.ok(candidatePool('world', false, { level: 3, currency: 'CHF' }).some((x) => x.currency === 'USD'));
+    assert.equal(quoteCurrencyOf('CSSPX.SW'), 'USD');
+    assert.equal(quoteCurrencyOf('MC.PA'), 'EUR');
   });
 
   it('la liste suisse ne contient que des placements suisses, et les cryptos seulement si acceptées', () => {

@@ -4,6 +4,7 @@
 
 import type { Bar } from '../../shared/types.ts';
 import type { MeasuredAsset } from '../../shared/profile.ts';
+import { fxAt, getFxHistory } from './fx.ts';
 import { getChart } from './yahoo.ts';
 
 const YEAR_MS = 365 * 86_400_000;
@@ -36,10 +37,18 @@ export function yearBefore(bars: Bar[], asOf: number): Bar[] {
  */
 export async function measureAssets(
   symbols: string[],
-  opts: { asOf?: number; concurrency?: number } = {},
+  opts: { asOf?: number; accountCurrency?: string; concurrency?: number } = {},
 ): Promise<{ measured: MeasuredAsset[]; errors: string[] }> {
   const asOf = opts.asOf ?? null;
   const range = asOf === null ? '1y' : '5y';
+  // Le risque et le rendement sont mesurés dans la monnaie du compte, tels que la personne les vivrait :
+  // pour une action en dollars et un compte en francs, les variations du dollar comptent aussi.
+  const account = opts.accountCurrency ?? null;
+  const fxHistories = new Map<string, Promise<Bar[]>>();
+  const fxHistory = (from: string) => {
+    if (!fxHistories.has(from)) fxHistories.set(from, getFxHistory(from, account as string, '1d', range));
+    return fxHistories.get(from) as Promise<Bar[]>;
+  };
   const measured: MeasuredAsset[] = [];
   const errors: string[] = [];
   let next = 0;
@@ -48,10 +57,15 @@ export async function measureAssets(
       const symbol = symbols[next++];
       try {
         const { quote, bars } = await getChart(symbol, '1d', range);
-        const window = asOf === null ? bars : yearBefore(bars, asOf);
+        let window = asOf === null ? bars : yearBefore(bars, asOf);
+        const price = window[window.length - 1]?.close ?? quote.price;
+        if (account && quote.currency !== account && window.length) {
+          const rate = fxAt(await fxHistory(quote.currency), NaN);
+          window = window.map((b) => ({ ...b, close: b.close * rate(b.time) })).filter((b) => Number.isFinite(b.close));
+        }
         const risk = measureRisk(window);
         if (!risk) errors.push(`${symbol} : pas assez d'historique`);
-        else measured.push({ symbol, name: quote.name || symbol, currency: quote.currency, price: window[window.length - 1].close, ...risk });
+        else measured.push({ symbol, name: quote.name || symbol, currency: quote.currency, price, ...risk });
       } catch (err) {
         errors.push(`${symbol} : ${err instanceof Error ? err.message : String(err)}`);
       }

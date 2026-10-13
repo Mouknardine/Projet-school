@@ -424,6 +424,21 @@ export interface AssetInfo {
   region: AssetRegion;
   sector: string;
   tech?: boolean;
+  /** Monnaie dans laquelle le placement est coté. */
+  currency: string;
+}
+
+/** Fonds cotés à la bourse suisse mais en dollars. */
+const QUOTED_IN_USD = new Set(['CSSPX.SW', 'CSNDX.SW']);
+
+/** Monnaie de cotation d'un symbole Yahoo Finance (déduite de sa bourse). */
+export function quoteCurrencyOf(symbol: string): string {
+  const s = symbol.toUpperCase();
+  if (QUOTED_IN_USD.has(s) || s.endsWith('-USD')) return 'USD';
+  if (s.endsWith('.SW')) return 'CHF';
+  if (/\.(PA|AS|DE|MI|MC|BR)$/.test(s)) return 'EUR';
+  if (s.endsWith('.L')) return 'GBP';
+  return 'USD';
 }
 
 const a = (symbol: string, name: string, what: string, kind: AssetKind, region: AssetRegion, sector: string, tech = false): AssetInfo => ({
@@ -434,6 +449,7 @@ const a = (symbol: string, name: string, what: string, kind: AssetKind, region: 
   region,
   sector,
   tech,
+  currency: quoteCurrencyOf(symbol),
 });
 
 export const ASSETS: AssetInfo[] = [
@@ -510,8 +526,22 @@ export function assetInfo(symbol: string): AssetInfo | undefined {
 
 const SAFE_KINDS: AssetKind[] = ['obligations', 'or'];
 
-/** Les placements parmi lesquels le bot choisit, selon la préférence de la personne. */
-export function candidatePool(region: string, crypto: boolean): AssetInfo[] {
+/**
+ * Jusqu'à ce niveau de risque, le bot ne choisit que des placements dans la monnaie du compte.
+ * Le change ajoute un risque qui ne rapporte rien en moyenne, et il coûte des frais à l'achat et à la vente
+ * (environ 1 % chez Yuh) : une personne prudente qui compte en francs n'a pas de raison de le prendre.
+ */
+export const LOCAL_CURRENCY_MAX_LEVEL = 2;
+
+/**
+ * Les placements parmi lesquels le bot choisit, selon la préférence de la personne.
+ * Pour un profil prudent, seuls ceux qui sont cotés dans la monnaie du compte (s'il y en a assez).
+ */
+export function candidatePool(region: string, crypto: boolean, opts: { level?: RiskLevel; currency?: string } = {}): AssetInfo[] {
+  if (opts.level !== undefined && opts.currency && opts.level <= LOCAL_CURRENCY_MAX_LEVEL) {
+    const local = ASSETS.filter((x) => x.kind !== 'crypto' && x.currency === opts.currency);
+    if (local.length >= 6) return local;
+  }
   return ASSETS.filter((x) => {
     if (x.kind === 'crypto') return crypto;
     // Les placements très calmes (obligations, or) sont toujours proposés, pour les profils prudents.
@@ -532,9 +562,9 @@ export interface MeasuredAsset {
   name: string;
   currency: string;
   price: number;
-  /** Volatilité annuelle (en %) : de combien le prix varie habituellement sur un an. */
+  /** Volatilité annuelle (en %), mesurée dans la monnaie du compte : de combien le placement varie habituellement sur un an. */
   volatility: number;
-  /** Évolution du prix sur un an (en %). */
+  /** Évolution sur un an (en %), dans la monnaie du compte (le change compris). */
   perf1y: number;
 }
 
