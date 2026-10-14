@@ -1,7 +1,7 @@
 // La page d'un placement créé avec le questionnaire, pour quelqu'un qui n'y connaît rien :
 //   1. ce que vaut son argent (et la courbe, avec la mise de départ et la limite de perte) ;
 //   2. ce que le bot a fait, dans l'ordre : chaque achat, chaque vente, et ce qui va se passer ensuite ;
-//   3. chaque placement, avec son graphique : quand le bot l'a acheté, à quel prix, et ce qu'il vaut aujourd'hui ;
+//   3. chaque placement, avec son graphique en chandeliers (TradingView) : quand le bot l'a acheté, à quel prix, et ce qu'il vaut aujourd'hui ;
 //   4. comment le bot a choisi ces placements (son profil, ses mesures, la règle de choix) ;
 //   5. quand il revendra.
 
@@ -40,10 +40,10 @@ import {
   type AssetKind,
   type SlotTrace,
 } from '../../../shared/profile.ts';
-import type { BotDetail, EquityPoint, LogEntry, Position, RiskLevel, SelectionMeasure, SelectionSnapshot, Trade, WatchItem } from '../../../shared/types.ts';
+import type { Bar, BotDetail, EquityPoint, LogEntry, Position, RiskLevel, SelectionMeasure, SelectionSnapshot, Trade, WatchItem } from '../../../shared/types.ts';
 import { Journal, LossBar, ManageCard, Stats } from '../components/botParts.tsx';
-import { COLORS, SERIES } from '../components/charts.tsx';
-import { AssetChart, BAND_COLORS, RiskMap, ValueChart } from '../components/placementCharts.tsx';
+import { COLORS, PriceChart, SERIES } from '../components/charts.tsx';
+import { BAND_COLORS, RiskMap, ValueChart } from '../components/placementCharts.tsx';
 import { AgitationChip, LEVEL_COLORS, ProfileBadge, RiskGauge } from '../components/profile.tsx';
 import { TradeDetail } from '../components/TradesTable.tsx';
 import { Badge, Card, cx, Delta, ErrorBox, LiveDot, Sheet, Spinner } from '../components/ui.tsx';
@@ -332,7 +332,6 @@ export function PlacementView({ detail, equity, trades, logs, now, busy, run, re
             watch={watchOf(selected)}
             pending={pending.includes(selected)}
             perPlacement={perPlacement}
-            createdAt={bot.createdAt}
             currency={cur}
             equity={summary.equity}
             volatility={selection.data?.measured.find((m) => m.symbol === selected)?.volatility ?? profile.volatility[selected] ?? null}
@@ -993,7 +992,14 @@ function HoldingRow({ symbol, name, color, position: p, currency, equity, pendin
   );
 }
 
-function PlacementDetail({ botId, symbol, name, color, position: p, watch, pending, perPlacement, createdAt, currency, equity, volatility, slot, favorite, tradesVersion, now }: {
+/** Bougies visibles au départ : de quoi voir le premier achat (et un peu avant), au moins trois mois. */
+function visibleBars(bars: Bar[], trades: Trade[]): number {
+  const firstBuy = Math.min(...trades.filter((t) => t.side === 'BUY').map((t) => t.time));
+  const since = Number.isFinite(firstBuy) ? bars.filter((b) => b.time >= firstBuy - DAY).length : 0;
+  return Math.max(65, since + 20);
+}
+
+function PlacementDetail({ botId, symbol, name, color, position: p, watch, pending, perPlacement, currency, equity, volatility, slot, favorite, tradesVersion, now }: {
   botId: number;
   symbol: string;
   name: string;
@@ -1002,7 +1008,6 @@ function PlacementDetail({ botId, symbol, name, color, position: p, watch, pendi
   watch: WatchItem | undefined;
   pending: boolean;
   perPlacement: number;
-  createdAt: number;
   currency: string;
   equity: number;
   volatility: number | null;
@@ -1077,9 +1082,24 @@ function PlacementDetail({ botId, symbol, name, color, position: p, watch, pendi
       </div>
 
       <div className="px-3 pt-4 pb-4 sm:px-5">
+        <p className="mb-3 max-w-3xl text-xs leading-relaxed text-ink-3">
+          Chaque bâton résume le prix sur une journée : <span className="text-up">vert</span> si le prix a monté, <span className="text-down">rouge</span> s'il a
+          baissé. Faites glisser le graphique pour remonter dans le temps.
+        </p>
         {chart.error && !chart.data && <ErrorBox>{chart.error}</ErrorBox>}
         {!chart.data && !chart.error && <Spinner label="Chargement des cours…" />}
-        {chart.data && <AssetChart bars={chart.data.bars} quote={chart.data.quote} trades={chart.data.trades} color={color} createdAt={createdAt} height={300} />}
+        {chart.data && (
+          <PriceChart
+            bars={chart.data.bars}
+            overlays={chart.data.overlays}
+            series={chart.data.series}
+            trades={chart.data.trades}
+            interval={chart.data.interval}
+            height={340}
+            initialBars={visibleBars(chart.data.bars, chart.data.trades)}
+            levels={p ? [{ price: p.entryPrice, label: "Prix d'achat" }] : []}
+          />
+        )}
       </div>
 
       {/* Pourquoi celui-ci */}

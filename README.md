@@ -30,8 +30,8 @@ protège l'argent selon le risque accepté.
   cette date, puis on rejoue ce qui s'est réellement passé ensuite, frais compris. Aucune information du futur n'est utilisée.
 - **Page d'un placement, pour débutants** : la valeur de l'argent (courbe avec la mise de départ, la limite de perte et chaque
   achat ou vente) ; la chronologie de tout ce que le bot a fait, jour par jour, et de ce qu'il va faire (achats à l'ouverture d'une
-  bourse, surveillance de la limite de perte) ; chaque placement avec son graphique (date et prix d'achat, zone de gain ou de
-  perte) ; **comment le bot a choisi** (les trois notes du profil, la carte agitation / gain de tous les placements analysés, le
+  bourse, surveillance de la limite de perte) ; chaque placement avec son graphique en chandeliers TradingView (achats, ventes
+  et ligne du prix d'achat) ; **comment le bot a choisi** (les trois notes du profil, la carte agitation / gain de tous les placements analysés, le
   classement de chaque case du profil, la répartition de l'argent) ; et les seules situations où il revend.
 - **Mode expert** (depuis la page « Comprendre ») : créer un bot à la main et tester toutes les stratégies sur le passé.
 

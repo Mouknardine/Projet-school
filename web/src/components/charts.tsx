@@ -13,6 +13,7 @@ import {
   type ChartOptions,
   type DeepPartial,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
   type SeriesMarker,
@@ -597,6 +598,12 @@ export interface TradeMark {
   trigger: TradeTrigger;
 }
 
+/** Ligne horizontale de repère, par exemple le prix d'achat. */
+export interface PriceLevel {
+  price: number;
+  label: string;
+}
+
 interface PriceChartProps {
   bars: Bar[];
   overlays: OverlayDef[];
@@ -606,6 +613,7 @@ interface PriceChartProps {
   height?: number;
   /** Nombre de bougies visibles au premier affichage (sinon : tout l'historique). */
   initialBars?: number;
+  levels?: PriceLevel[];
 }
 
 /** Associe un trade à la bougie pendant laquelle il a eu lieu. */
@@ -639,23 +647,25 @@ function markerFor(trade: TradeMark, barTime: number, withText: boolean): Series
     : { time: toSec(barTime), position: 'aboveBar', shape: 'arrowDown', color: COLORS.down, text: label };
 }
 
-export function PriceChart({ bars, overlays, series, trades, interval, height = 420, initialBars }: PriceChartProps) {
+export function PriceChart({ bars, overlays, series, trades, interval, height = 420, initialBars, levels = [] }: PriceChartProps) {
   const container = useRef<HTMLDivElement>(null);
   const chartRef = useRef<{
     chart: IChartApi;
     candles: ISeriesApi<'Candlestick'>;
     lines: Map<string, ISeriesApi<SeriesType>>;
     markers: ISeriesMarkersPluginApi<Time>;
+    levels: IPriceLine[];
     fitted: boolean;
   } | null>(null);
-  const latest = useRef({ bars, series, trades, overlays, initialBars });
-  latest.current = { bars, series, trades, overlays, initialBars };
+  const latest = useRef({ bars, series, trades, overlays, initialBars, levels });
+  latest.current = { bars, series, trades, overlays, initialBars, levels };
   const structureKey = JSON.stringify(overlays) + interval;
+  const levelsKey = JSON.stringify(levels);
 
   const applyData = () => {
     const c = chartRef.current;
     if (!c) return;
-    const { bars, series, trades, overlays, initialBars } = latest.current;
+    const { bars, series, trades, overlays, initialBars, levels } = latest.current;
     c.candles.setData(bars.map((b) => ({ time: toSec(b.time), open: b.open, high: b.high, low: b.low, close: b.close })));
     for (const ov of overlays) {
       const s = c.lines.get(ov.key);
@@ -676,6 +686,11 @@ export function PriceChart({ bars, overlays, series, trades, interval, height = 
       .sort((a, b) => a.barTime - b.barTime)
       .map((m) => markerFor(m.t, m.barTime, (container.current?.clientWidth ?? 0) >= 640));
     c.markers.setMarkers(marks);
+
+    for (const line of c.levels) c.candles.removePriceLine(line);
+    c.levels = levels.map((l) =>
+      c.candles.createPriceLine({ price: l.price, color: COLORS.ink2, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: l.label }),
+    );
 
     if (!c.fitted && bars.length > 0) {
       c.fitted = true;
@@ -716,7 +731,7 @@ export function PriceChart({ bars, overlays, series, trades, interval, height = 
       panes[1].setStretchFactor(1);
     }
     const markers = createSeriesMarkers(candles, []);
-    chartRef.current = { chart, candles, lines, markers, fitted: false };
+    chartRef.current = { chart, candles, lines, markers, levels: [], fitted: false };
     applyData();
     return () => {
       chartRef.current = null;
@@ -724,7 +739,7 @@ export function PriceChart({ bars, overlays, series, trades, interval, height = 
     };
   }, [structureKey]);
 
-  useEffect(applyData, [bars, series, trades]);
+  useEffect(applyData, [bars, series, trades, levelsKey]);
 
   return (
     <div>
@@ -735,6 +750,11 @@ export function PriceChart({ bars, overlays, series, trades, interval, height = 
         <span className="inline-flex items-center gap-1.5">
           <span className="text-up">▲</span> achat du bot <span className="ml-2 text-down">▼</span> vente du bot
         </span>
+        {levels.map((l) => (
+          <span key={l.label} className="inline-flex items-center gap-1.5">
+            <span className="w-3 border-t border-dashed border-ink-2" /> {l.label.toLowerCase()}
+          </span>
+        ))}
       </div>
       <div ref={container} style={{ height }} />
     </div>
