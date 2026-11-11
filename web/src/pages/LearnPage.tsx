@@ -80,7 +80,7 @@ export function LearnPage() {
             <b className="font-semibold text-ink">argent fictif</b> : personne ne peut rien perdre.
           </p>
           <p>
-            La question à laquelle l'application répond : <b className="font-semibold text-ink">peut-on investir avec un robot, sans prendre soi-même aucune décision ?</b>{' '}
+            La question à laquelle l'application répond : <b className="font-semibold text-ink">peut-on faire trader un robot, sans prendre soi-même aucune décision ?</b>{' '}
             La personne répond seulement à un questionnaire. Le bot fait tout le reste : il choisit les actions, décide quand acheter et vendre, et protège
             l'argent. Pour juger s'il fait du bon travail, chaque bot est comparé à la stratégie « acheter et garder », et chacune de ses décisions est
             expliquée en français.
@@ -110,7 +110,7 @@ export function LearnPage() {
             <thead className="text-xs text-ink-3">
               <tr className="border-b border-line">
                 <th className="py-2 pr-3 font-medium">Profil</th>
-                <th className="py-2 pr-3 font-medium">Ce que le bot achète</th>
+                <th className="py-2 pr-3 font-medium">Ce que le bot trade</th>
                 <th className="py-2 pr-3 font-medium">Comment il décide</th>
                 <th className="py-2 pr-3 font-medium">Réserve</th>
                 <th className="py-2 font-medium">Limite de perte</th>
@@ -126,10 +126,10 @@ export function LearnPage() {
                       {l}. {p.name}
                     </td>
                     <td className="py-2.5 pr-3 text-ink-3">
-                      {p.slots.length} placements : {kinds}
+                      {p.slots.length} valeurs : {kinds}
                     </td>
                     <td className="py-2.5 pr-3 text-ink-3">
-                      {p.strategy === 'buy_hold' ? 'Achète, garde et protège' : (strategies.find((s) => s.id === p.strategy)?.name ?? p.strategy)}
+                      {p.strategy === 'buy_hold' ? 'Achète, garde et protège' : `Trade : ${(strategies.find((s) => s.id === p.strategy)?.name ?? p.strategy).toLowerCase()}`}
                     </td>
                     <td className="py-2.5 pr-3 text-ink-3">{100 - p.maxInvestedPct}&nbsp;%</td>
                     <td className="py-2.5 text-ink-3">−{p.maxLossPct}&nbsp;%</td>
@@ -157,9 +157,9 @@ export function LearnPage() {
 
       <Section title="Ce que nos tests ont montré">
         <p>
-          Pour savoir comment le bot doit gérer un placement, nous l'avons testé de façon honnête. Le bot se place en{' '}
-          <b className="font-semibold text-ink">octobre 2022</b> et choisit ses placements avec les seuls cours connus à ce moment-là (ceux de l'année d'avant).
-          Puis on rejoue ce qui s'est réellement passé jusqu'en octobre 2026, avec les vrais frais de Yuh, un compte en francs et 10 000 CHF par profil. Aucune
+          Pour savoir si le trading du bot vaut mieux que de garder ses actions, nous l'avons testé de façon honnête. Le bot se place en{' '}
+          <b className="font-semibold text-ink">novembre 2022</b> et choisit ses valeurs avec les seuls cours connus à ce moment-là (ceux de l'année d'avant).
+          Puis on rejoue ce qui s'est réellement passé jusqu'en novembre 2026, avec les vrais frais de Yuh, un compte en francs et 10 000 CHF par profil. Aucune
           information du futur n'est utilisée.
         </p>
         <div className="-mx-1 overflow-x-auto px-1">
@@ -167,29 +167,29 @@ export function LearnPage() {
             <thead className="text-xs text-ink-3">
               <tr className="border-b border-line">
                 <th className="py-2 pr-3 font-medium">Profil</th>
-                <th className="py-2 pr-3 font-medium">Le bot : acheter, garder, protéger</th>
-                <th className="py-2 pr-3 font-medium">Pire baisse</th>
-                <th className="py-2 pr-3 font-medium">Suivre la tendance (acheter et vendre)</th>
-                <th className="py-2 font-medium">Frais : bot / tendance</th>
+                <th className="py-2 pr-3 font-medium">Acheter et garder</th>
+                <th className="py-2 pr-3 font-medium">Le bot : trader (suivre la tendance)</th>
+                <th className="py-2 pr-3 font-medium">Pire baisse : garder / trader</th>
+                <th className="py-2 font-medium">Frais : garder / trader</th>
               </tr>
             </thead>
             <tbody className="text-ink-2">
               {(
                 [
-                  [1, '+26,0 %', '−7,5 %', '+20,3 %', '34 / 81 CHF'],
-                  [2, '+29,1 %', '−9,0 %', '+20,1 %', '46 / 133 CHF'],
-                  [3, '+35,1 %', '−11,5 %', '+21,1 %', '111 / 482 CHF'],
-                  [4, '+38,7 %', '−12,6 %', '+19,0 %', '140 / 666 CHF'],
-                  [5, '+41,2 %', '−29,7 %', '+18,8 %', '157 / 981 CHF'],
+                  [1, '+25,7 %', '+22,0 %', '−7,5 % / −8,9 %', '34 / 81 CHF'],
+                  [2, '+41,0 %', '+35,6 %', '−8,8 % / −11,4 %', '46 / 120 CHF'],
+                  [3, '+28,1 %', '+16,5 %', '−10,8 % / −13,1 %', '111 / 565 CHF'],
+                  [4, '+32,8 %', '+15,5 %', '−14,4 % / −18,4 %', '140 / 626 CHF'],
+                  [5, '+26,6 %', '−13,9 %', '−28,3 % / −33,3 %', '144 / 1100 CHF'],
                 ] as [RiskLevel, string, string, string, string][]
-              ).map(([level, bot, drop, trend, fees]) => (
+              ).map(([level, hold, trend, drop, fees]) => (
                 <tr key={level} className="border-b border-line last:border-0">
                   <td className="py-2 pr-3 font-semibold whitespace-nowrap" style={{ color: LEVEL_COLORS[level] }}>
                     {PROFILES[level].name}
                   </td>
-                  <td className="py-2 pr-3 text-up">{nbsp(bot)}</td>
-                  <td className="py-2 pr-3 text-down">{nbsp(drop)}</td>
-                  <td className="py-2 pr-3">{nbsp(trend)}</td>
+                  <td className="py-2 pr-3 text-up">{nbsp(hold)}</td>
+                  <td className={`py-2 pr-3 ${trend.startsWith('−') ? 'text-down' : 'text-ink'}`}>{nbsp(trend)}</td>
+                  <td className="py-2 pr-3">{nbsp(drop)}</td>
                   <td className="py-2">{nbsp(fees)}</td>
                 </tr>
               ))}
@@ -197,16 +197,16 @@ export function LearnPage() {
           </table>
         </div>
         <p>
-          <b className="font-semibold text-ink">1. Le profil se voit dans les résultats.</b> Plus le profil est audacieux, plus le placement a rapporté, et plus la
-          pire baisse a été forte : −7,5 % pour le profil très prudent, −29,7 % pour le profil audacieux. C'est la règle de base de la bourse.
+          <b className="font-semibold text-ink">1. Le profil se voit dans la pire baisse.</b> Plus le profil est audacieux, plus la pire baisse a été forte :
+          −7,5 % pour le profil très prudent, −28,3 % pour le profil audacieux (en gardant). C'est la règle de base de la bourse.
         </p>
         <p>
-          <b className="font-semibold text-ink">2. Acheter et vendre souvent ne paie pas.</b> À chaque niveau, suivre la tendance (moyenne sur 100 jours, vente
-          10 % en dessous) a rapporté moins, a coûté 2 à 6 fois plus de frais, et n'a réduit la pire baisse que pour le profil audacieux. Pour un petit investisseur, chaque
-          achat ou vente d'une action étrangère coûte environ 1,6 % chez Yuh (courtage, change, droit de timbre) : les allers-retours mangent les gains. Le bot
-          ajoute donc de la valeur en <b className="font-semibold text-ink">choisissant</b> des placements adaptés, en{' '}
-          <b className="font-semibold text-ink">répartissant</b> l'argent et en <b className="font-semibold text-ink">protégeant</b> le placement, plutôt qu'en
-          essayant de deviner le bon moment.
+          <b className="font-semibold text-ink">2. Trader coûte cher, et ça se voit.</b> Le bot trade en suivant la tendance (moyenne sur 100 jours, vente 10 % en
+          dessous). À chaque niveau, il a rapporté moins que « acheter et garder », a payé 2 à 8 fois plus de frais et n'a jamais réduit la pire baisse. Pour un petit
+          compte, chaque achat ou vente d'une action étrangère coûte environ 1,6 % chez Yuh (courtage, change, droit de timbre) : les allers-retours mangent les gains.
+          Avec des règles plus nerveuses (un score de plusieurs indicateurs, des stop-loss serrés), c'est pire : environ 100 ordres en 4 ans, 800 à 2 500 CHF de frais pour
+          10 000 CHF de capital, et des pertes. Le trading du bot sert donc d'abord à <b className="font-semibold text-ink">étudier</b> cette question, et la simulation
+          montre toujours cette comparaison avant le lancement.
         </p>
         <p>
           <b className="font-semibold text-ink">3. La monnaie compte.</b> Dans une première version, le profil très prudent avait choisi des actions américaines :

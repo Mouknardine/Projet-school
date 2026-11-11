@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  TrendingDown,
   TriangleAlert,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -56,7 +57,7 @@ const DAY = 86_400_000;
 const SECTIONS = [
   { id: 'resume', label: 'Résumé' },
   { id: 'historique', label: "Ce qu'il a fait" },
-  { id: 'placements', label: 'Ses placements' },
+  { id: 'placements', label: 'Ses positions' },
   { id: 'choix', label: 'Comment il a choisi' },
   { id: 'ventes', label: 'Quand il vend' },
   { id: 'details', label: 'Détails' },
@@ -175,10 +176,14 @@ export function PlacementView({ detail, equity, trades, logs, now, busy, run, re
   const sells = allTrades.filter((t) => t.side === 'SELL');
   const anyOpen = watchlist.some((w) => w.marketOpen);
   const perPlacement = (summary.equity * bot.positionSizePct) / 100;
-  const pendingCash = Math.min(summary.cash, pending.length * perPlacement);
+  // Un bot de trading n'achète pas à l'ouverture : il attend un signal. Seul « acheter et garder » a des achats programmés.
+  const trading = bot.strategy !== 'buy_hold';
+  const pendingCash = trading ? 0 : Math.min(summary.cash, pending.length * perPlacement);
   const reserve = summary.cash - (bot.status === 'running' && !protection ? pendingCash : 0);
-  const sellRule =
-    bot.maxLossPct > 0
+  // Pour un bot de trading, c'est la règle de sa stratégie qui explique les ventes (pas « il garde jusqu'à la limite de perte »).
+  const sellRule = trading
+    ? undefined
+    : bot.maxLossPct > 0
       ? `seulement si votre placement entier descend sous ${fmtMoney(lossFloor, cur, 0)} (−${bot.maxLossPct} %, votre limite de perte), ou si vous le décidez.`
       : 'seulement si vous le décidez.';
 
@@ -207,7 +212,7 @@ export function PlacementView({ detail, equity, trades, logs, now, busy, run, re
       {/* En-tête */}
       <div>
         <Link to="/" className="inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2 [&_svg]:size-4">
-          <ArrowLeft aria-hidden /> Mes placements
+          <ArrowLeft aria-hidden /> Mes bots
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{bot.name}</h1>
@@ -218,8 +223,8 @@ export function PlacementView({ detail, equity, trades, logs, now, busy, run, re
           <ProfileBadge level={profile.level} className="py-1" />
         </div>
         <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-ink-2">
-          Un robot gère ces {fmtMoney(bot.initialCapital, cur, 0)} d'argent fictif selon votre profil, sur les vrais cours de la bourse. Vous n'avez rien à
-          décider : voici tout ce qu'il a fait, et pourquoi.
+          Un robot trade ces {fmtMoney(bot.initialCapital, cur, 0)} d'argent fictif selon votre profil, sur les vrais cours de la bourse. Vous n'avez rien à
+          décider : voici chaque ordre qu'il a passé, et pourquoi.
         </p>
         <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-ink-3">
           <Clock className="size-3.5" aria-hidden /> Dernière vérification {fmtRelative(bot.lastTickAt, now)} · il vérifie toutes les {tickSeconds} secondes
@@ -286,7 +291,7 @@ export function PlacementView({ detail, equity, trades, logs, now, busy, run, re
       <section id="placements" className="scroll-mt-20 space-y-3">
         <SectionTitle
           icon={<Layers />}
-          title="Ses placements, un par un"
+          title="Ses valeurs, une par une"
           text="Touchez un placement pour voir son graphique : où le bot l'a acheté, à quel prix, et ce qu'il vaut aujourd'hui."
         />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-5">
@@ -301,6 +306,7 @@ export function PlacementView({ detail, equity, trades, logs, now, busy, run, re
                   currency={cur}
                   equity={summary.equity}
                   pending={pending.includes(s)}
+                  trading={trading}
                   when={whenBuys(watchOf(s), now)}
                   active={s === selected}
                   onSelect={() => selectAsset(s)}
@@ -331,6 +337,7 @@ export function PlacementView({ detail, equity, trades, logs, now, busy, run, re
             position={positionOf(selected)}
             watch={watchOf(selected)}
             pending={pending.includes(selected)}
+            trading={trading}
             perPlacement={perPlacement}
             createdAt={bot.createdAt}
             currency={cur}
@@ -360,6 +367,10 @@ export function PlacementView({ detail, equity, trades, logs, now, busy, run, re
 
       <WhenItSells
         maxLossPct={bot.maxLossPct}
+        stopLossPct={bot.stopLossPct}
+        takeProfitPct={bot.takeProfitPct}
+        trendPeriod={bot.params.period ?? 0}
+        trendBand={bot.strategy === 'trend' ? (bot.params.band ?? null) : null}
         lossFloor={lossFloor}
         equity={summary.equity}
         currency={cur}
@@ -462,7 +473,7 @@ function Hero({ detail, equity, trades, pending, pendingCash, reserve, colorOf, 
       <div className="grid grid-cols-1 xl:grid-cols-5">
         <div className="border-b border-line p-5 sm:p-6 xl:col-span-2 xl:border-r xl:border-b-0">
           <div className="text-xs font-medium text-ink-3">
-            {hover ? `Valeur le ${new Date(hover.time).toLocaleString('fr-CH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Ce que vaut votre placement'}
+            {hover ? `Valeur le ${new Date(hover.time).toLocaleString('fr-CH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Valeur du compte'}
           </div>
           <div className="num mt-1 text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
             <AnimatedMoney value={shown} from={bot.initialCapital} currency={cur} instant={!!hover} />
@@ -477,11 +488,11 @@ function Hero({ detail, equity, trades, pending, pendingCash, reserve, colorOf, 
             Vous avez confié <b className="font-semibold text-ink">{fmtMoney(bot.initialCapital, cur, 0)}</b> au bot.{' '}
             {positions.length ? (
               <>
-                Il en a investi <b className="font-semibold text-ink">{fmtMoney(summary.positionsValue, cur, 0)}</b> dans {positions.length} placement
-                {positions.length > 1 ? 's' : ''}
+                Il a <b className="font-semibold text-ink">{fmtMoney(summary.positionsValue, cur, 0)}</b> engagés dans {positions.length} position
+                {positions.length > 1 ? 's' : ''} ouverte{positions.length > 1 ? 's' : ''}
               </>
             ) : (
-              <>Il n'a encore rien acheté</>
+              <>Il n'a encore ouvert aucune position : il attend un signal d'achat</>
             )}
             {pending.length > 0 && pendingCash > 0 && (
               <>
@@ -491,7 +502,7 @@ function Hero({ detail, equity, trades, pending, pendingCash, reserve, colorOf, 
               </>
             )}
             . Il garde <b className="font-semibold text-ink">{fmtMoney(Math.max(0, reserve), cur, 0)}</b> en réserve.{' '}
-            {sells === 0 ? "Il n'a rien revendu." : `Il a revendu ${sells} fois.`}
+            {sells === 0 ? "Il n'a encore rien vendu." : `Il a déjà clôturé ${sells} position${sells > 1 ? 's' : ''}.`}
           </p>
 
           {/* Où est l'argent */}
@@ -675,7 +686,7 @@ function Timeline({ detail, trades, logs, now, pending, perPlacement, analysed, 
 
   // À venir : les placements pas encore achetés, regroupés par heure d'ouverture de leur bourse.
   const upcoming = useMemo(() => {
-    if (bot.status !== 'running' || protection) return [];
+    if (bot.status !== 'running' || protection || bot.strategy !== 'buy_hold') return [];
     const groups = new Map<string, string[]>();
     for (const s of pending) {
       const when = whenBuys(watchOf(s), now);
@@ -799,16 +810,16 @@ function Timeline({ detail, trades, logs, now, pending, perPlacement, analysed, 
                 </>
               ) : (
                 <>
-                  <p className="font-semibold text-ink">Le bot garde ses placements et surveille votre argent</p>
+                  <p className="font-semibold text-ink">Le bot surveille les cours et ses positions</p>
                   <p className="mt-0.5 text-sm leading-relaxed text-ink-2">
                     Toutes les minutes, il recalcule ce que vaut votre placement.{' '}
                     {lossFloor !== null ? (
                       <>
-                        Il vendra tout seulement s'il descend sous <b className="num font-semibold text-ink">{fmtMoney(lossFloor, cur, 0)}</b> (−{bot.maxLossPct}&nbsp;%) : il reste{' '}
+                        Le bot liquidera tout si le compte descend sous <b className="num font-semibold text-ink">{fmtMoney(lossFloor, cur, 0)}</b> (−{bot.maxLossPct}&nbsp;%) : il reste{' '}
                         <b className="num font-semibold text-ink">{fmtMoney(Math.max(0, summary.equity - lossFloor), cur, 0)}</b> de marge.
                       </>
                     ) : (
-                      'Il ne vend pas de lui-même.'
+                      'Aucune limite de perte globale n’est fixée.'
                     )}
                   </p>
                   {lossFloor !== null && (
@@ -942,7 +953,7 @@ function TradeRow({ trade: t, name, color, currency, onOpen }: { trade: Trade; n
 // 3. Chaque placement
 // ---------------------------------------------------------------------------
 
-function HoldingRow({ symbol, name, color, position: p, currency, equity, pending, when, active, onSelect }: {
+function HoldingRow({ symbol, name, color, position: p, currency, equity, pending, trading = false, when, active, onSelect }: {
   symbol: string;
   name: string;
   color: string;
@@ -950,6 +961,7 @@ function HoldingRow({ symbol, name, color, position: p, currency, equity, pendin
   currency: string;
   equity: number;
   pending: boolean;
+  trading?: boolean;
   when: string;
   active: boolean;
   onSelect: () => void;
@@ -970,7 +982,7 @@ function HoldingRow({ symbol, name, color, position: p, currency, equity, pendin
         <span className="block truncate text-sm font-semibold text-ink">{name}</span>
         <span className="block truncate text-xs text-ink-3">
           {kind ? KIND_LABEL[kind] : symbol}
-          {p ? ` · acheté le ${new Date(p.openedAt).toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })}` : pending ? ' · pas encore acheté' : ' · revendu'}
+          {p ? ` · position ouverte le ${new Date(p.openedAt).toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })}` : pending ? (trading ? ' · en surveillance' : ' · pas encore acheté') : ' · position clôturée'}
         </span>
       </span>
       <span className="num shrink-0 text-right">
@@ -983,17 +995,17 @@ function HoldingRow({ symbol, name, color, position: p, currency, equity, pendin
           </>
         ) : pending ? (
           <span className="inline-flex items-center gap-1 rounded-md bg-raised px-1.5 py-0.5 text-[11px] font-medium text-ink-2" title={`Achat ${when}`}>
-            <Clock className="size-3" aria-hidden /> en attente
+            <Clock className="size-3" aria-hidden /> {trading ? 'sans signal' : 'en attente'}
           </span>
         ) : (
-          <span className="text-xs text-ink-3">vendu</span>
+          <span className="text-xs text-ink-3">clôturée</span>
         )}
       </span>
     </button>
   );
 }
 
-function PlacementDetail({ botId, symbol, name, color, position: p, watch, pending, perPlacement, createdAt, currency, equity, volatility, slot, favorite, tradesVersion, now }: {
+function PlacementDetail({ botId, symbol, name, color, position: p, watch, pending, trading = false, perPlacement, createdAt, currency, equity, volatility, slot, favorite, tradesVersion, now }: {
   botId: number;
   symbol: string;
   name: string;
@@ -1001,6 +1013,7 @@ function PlacementDetail({ botId, symbol, name, color, position: p, watch, pendi
   position: Position | undefined;
   watch: WatchItem | undefined;
   pending: boolean;
+  trading?: boolean;
   perPlacement: number;
   createdAt: number;
   currency: string;
@@ -1067,8 +1080,17 @@ function PlacementDetail({ botId, symbol, name, color, position: p, watch, pendi
           <div className="col-span-2 flex items-start gap-3 bg-surface px-4 py-3.5 sm:col-span-4">
             <Clock className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
             <p className="text-sm leading-relaxed text-ink-2">
-              <b className="font-semibold text-ink">Pas encore acheté.</b> Le bot l'achètera {whenBuys(watch, now)}, pour environ {fmtMoney(perPlacement, currency, 0)}. En
-              attendant, cet argent reste en réserve.
+              {trading ? (
+                <>
+                  <b className="font-semibold text-ink">En surveillance, aucun signal d'achat pour l'instant.</b> Le bot ouvrira une position (environ{' '}
+                  {fmtMoney(perPlacement, currency, 0)}) dès que la majorité de ses indicateurs deviendra positive, à la clôture d'une séance.
+                </>
+              ) : (
+                <>
+                  <b className="font-semibold text-ink">Pas encore acheté.</b> Le bot l'achètera {whenBuys(watch, now)}, pour environ {fmtMoney(perPlacement, currency, 0)}. En
+                  attendant, cet argent reste en réserve.
+                </>
+              )}
             </p>
           </div>
         ) : (
@@ -1426,8 +1448,12 @@ function ShareBar({ label, pct, color, amount, delay }: { label: string; pct: nu
 // 5. Quand le bot vend
 // ---------------------------------------------------------------------------
 
-function WhenItSells({ maxLossPct, lossFloor, equity, currency, paused, sells }: {
+function WhenItSells({ maxLossPct, stopLossPct, takeProfitPct, trendPeriod, trendBand, lossFloor, equity, currency, paused, sells }: {
   maxLossPct: number;
+  stopLossPct: number;
+  takeProfitPct: number;
+  trendPeriod: number;
+  trendBand: number | null;
   lossFloor: number | null;
   equity: number;
   currency: string;
@@ -1438,11 +1464,11 @@ function WhenItSells({ maxLossPct, lossFloor, equity, currency, paused, sells }:
     <section id="ventes" className="scroll-mt-20 space-y-3">
       <SectionTitle
         icon={<ShieldCheck />}
-        title="Quand le bot revend-il ?"
-        text={sells === 0 ? "Pour l'instant, il n'a rien revendu. Voici les seules situations où il le fera." : `Il a revendu ${sells} fois. Voici les seules situations où il revend.`}
+        title="Quand le bot vend-il ?"
+        text={sells === 0 ? "Pour l'instant, il n'a rien vendu. Voici les trois situations où il vend." : `Il a vendu ${sells} fois. Voici les trois situations où il vend.`}
       />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <RuleCard icon={<TriangleAlert />} tone="down" title={maxLossPct > 0 ? `Si votre placement perd plus de ${maxLossPct} %` : 'Pas de limite de perte'}>
+        <RuleCard icon={<TriangleAlert />} tone="down" title={maxLossPct > 0 ? `Si le compte perd plus de ${maxLossPct} %` : 'Pas de limite de perte'}>
           {lossFloor !== null ? (
             <>
               <p>
@@ -1458,23 +1484,36 @@ function WhenItSells({ maxLossPct, lossFloor, equity, currency, paused, sells }:
               </p>
             </>
           ) : (
-            <p>Ce placement n'a pas de limite de perte : le bot ne vend pas de lui-même.</p>
+            <p>Ce compte n'a pas de limite de perte globale.</p>
           )}
+        </RuleCard>
+        <RuleCard icon={<TrendingDown />} tone="down" title="Quand la tendance se retourne">
+          <p>
+            {trendBand !== null ? (
+              <>
+                Chaque jour, à la clôture, le bot compare le prix de chaque valeur à sa moyenne des <b className="num font-semibold text-ink">{trendPeriod} derniers jours</b>. S'il
+                passe à plus de <b className="num font-semibold text-ink">{trendBand}&nbsp;%</b> sous cette moyenne, la tendance est retournée : le bot clôture la
+                position. Tant que le prix repasse au-dessus, il peut la rouvrir.
+              </>
+            ) : (
+              <>Quand le signal de sa stratégie passe à la vente, le bot clôture la position.</>
+            )}
+          </p>
+          {(stopLossPct > 0 || takeProfitPct > 0) && (
+            <p className="mt-2">
+              {stopLossPct > 0 && <>Stop-loss : il coupe une position qui perd {stopLossPct}&nbsp;%. </>}
+              {takeProfitPct > 0 && <>Objectif : il encaisse à +{takeProfitPct}&nbsp;%.</>}
+            </p>
+          )}
+          <Link to="/apprendre" className="mt-2 inline-flex items-center gap-0.5 text-xs font-medium text-accent-text hover:underline">
+            Comment le bot décide <ChevronRight className="size-3.5" aria-hidden />
+          </Link>
         </RuleCard>
         <RuleCard icon={<Hand />} tone="accent" title="Si vous le décidez">
           <p>
-            Vous gardez la main : vous pouvez {paused ? 'relancer le bot' : 'mettre le bot en pause'} ou tout recommencer, plus bas dans « Gérer ce placement ». Le bot,
-            lui, ne vend jamais par peur ou par envie.
+            Vous gardez la main : vous pouvez {paused ? 'relancer le bot' : 'mettre le bot en pause'} ou tout recommencer, plus bas dans « Gérer ». Vous pouvez aussi
+            clôturer une position à la main.
           </p>
-        </RuleCard>
-        <RuleCard icon={<Play />} tone="up" title="Jamais pour « encaisser un gain »">
-          <p>
-            Il ne cherche pas à acheter bas et revendre haut. Nos tests sur 4 ans de vrais cours, frais réels compris, montrent que pour un petit investisseur ces allers-retours
-            coûtent plus en frais qu'ils ne rapportent : le bot choisit bien, puis il garde.
-          </p>
-          <Link to="/apprendre" className="mt-2 inline-flex items-center gap-0.5 text-xs font-medium text-accent-text hover:underline">
-            Voir les résultats des tests <ChevronRight className="size-3.5" aria-hidden />
-          </Link>
         </RuleCard>
       </div>
     </section>

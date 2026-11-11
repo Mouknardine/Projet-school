@@ -358,7 +358,14 @@ export function createApi(deps: AppDeps): Hono {
       broker: input.broker,
     });
     const strategyId = input.strategy ?? base.strategy;
-    const cfg = { ...base, strategy: strategyId, params: input.strategy ? normalizeParams(strategyId, input.params) : base.params, profile: null };
+    // Une stratégie de comparaison tourne sans le stop-loss ni l'objectif de gain du profil : elle se juge seule.
+    const cfg = {
+      ...base,
+      strategy: strategyId,
+      params: input.strategy ? normalizeParams(strategyId, input.params) : base.params,
+      ...(input.strategy ? { stopLossPct: 0, takeProfitPct: 0 } : {}),
+      profile: null,
+    };
     const warmup = getStrategy(cfg.strategy).warmup(cfg.params);
 
     // 3. Les cours à partir de la date de départ (plus l'historique nécessaire aux calculs de la stratégie).

@@ -1,4 +1,4 @@
-import { BookOpen, Sparkles, Wallet } from 'lucide-react';
+import { Activity, BookOpen, Plus } from 'lucide-react';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Link, NavLink, Route, Routes, useLocation } from 'react-router';
 import type { AppConfig, StrategyInfo } from '../../shared/types.ts';
@@ -32,8 +32,8 @@ function Logo() {
 
 /** Les menus, avec un libellé court (barre du bas sur mobile) et un libellé complet (barre latérale). */
 const NAV = [
-  { to: '/', short: 'Mes placements', label: 'Mes placements', icon: Wallet, end: true },
-  { to: '/investir', short: 'Investir', label: 'Nouveau placement', icon: Sparkles, end: true },
+  { to: '/', short: 'Mes bots', label: 'Mes bots', icon: Activity, end: true },
+  { to: '/investir', short: 'Nouveau bot', label: 'Nouveau bot', icon: Plus, end: true },
   { to: '/apprendre', short: 'Comprendre', label: 'Comment ça marche', icon: BookOpen, end: false },
 ];
 
@@ -46,7 +46,7 @@ function SidebarBots() {
   const { data } = usePolling(() => api.bots(), [], 20_000);
   return (
     <div className="mt-6">
-      <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">Mes placements</div>
+      <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">Mes bots</div>
       <ul className="space-y-0.5">
         {(data ?? []).map(({ bot, summary }) => (
           <li key={bot.id}>
@@ -62,7 +62,7 @@ function SidebarBots() {
             </NavLink>
           </li>
         ))}
-        {data && data.length === 0 && <li className="px-3 py-2 text-xs text-ink-3">Aucun placement pour l'instant</li>}
+        {data && data.length === 0 && <li className="px-3 py-2 text-xs text-ink-3">Aucun bot pour l'instant</li>}
       </ul>
     </div>
   );
@@ -83,7 +83,7 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
           <Logo />
           <span>
             <span className="block text-[15px] font-bold leading-tight tracking-tight text-ink">TradeBot</span>
-            <span className="block text-[11px] text-ink-3">Un robot investit pour vous · TIP</span>
+            <span className="block text-[11px] text-ink-3">Un robot trade pour vous · TIP</span>
           </span>
         </Link>
         <nav className="mt-7 space-y-0.5" aria-label="Menu principal">
@@ -97,7 +97,7 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
         {ready && <SidebarBots />}
         <div className="mt-auto rounded-xl border border-line bg-page/60 p-3 text-xs leading-relaxed text-ink-3">
           <div className="mb-1 flex items-center gap-1.5 font-semibold text-ink-2">
-            <span className="size-1.5 rounded-full bg-warn" /> Simulation : argent fictif
+            <span className="size-1.5 rounded-full bg-warn" /> Paper trading : argent fictif
           </div>
           Les cours de bourse sont réels (Yahoo Finance), mais l'argent est fictif : aucun ordre n'est passé sur un vrai marché.
         </div>
@@ -110,11 +110,11 @@ function Layout({ children, ready }: { children: ReactNode; ready: boolean }) {
             <Logo />
             <span>
               <span className="block text-[15px] font-bold leading-tight tracking-tight text-ink">TradeBot</span>
-              <span className="block text-[11px] leading-tight text-ink-3">Un robot investit pour vous</span>
+              <span className="block text-[11px] leading-tight text-ink-3">Un robot trade pour vous</span>
             </span>
           </Link>
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-warn/30 bg-warn/10 px-2.5 py-1 text-[11px] font-medium text-warn">
-            <span className="size-1.5 rounded-full bg-warn" aria-hidden /> Argent fictif
+            <span className="size-1.5 rounded-full bg-warn" aria-hidden /> Paper trading
           </span>
         </div>
       </header>

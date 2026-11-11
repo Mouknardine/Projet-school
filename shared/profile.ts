@@ -236,26 +236,28 @@ export function trendExplanation(days: number, band: number): string {
   return `Une fois par jour, à la clôture de la bourse, le bot compare le prix de chaque placement à son prix moyen des ${days} derniers jours de bourse (environ ${weeks} semaines). Il achète quand le prix est au-dessus (la tendance monte) et vend quand il passe plus de ${band} % en dessous (la tendance s'est retournée). Il agit peu souvent : chaque achat et chaque vente coûte des frais.`;
 }
 
+/** Réglages de la règle « suivre la tendance » : moyenne sur 100 jours de bourse, marge de 10 % avant de vendre. */
+export const TREND_DAYS = 100;
+export const TREND_BAND = 10;
+
 /**
- * Comment décide le bot d'un placement créé avec le questionnaire.
- * Nos tests honnêtes sur les vrais cours (choix en oct. 2022 avec les seuls cours d'avant, puis rejoué jusqu'en
- * oct. 2026, frais réels de Yuh) ont montré que, pour un petit investisseur, acheter et vendre souvent (par exemple en
- * suivant la tendance) rapporte moins, à tous les niveaux de risque, que de garder ses placements : les frais et les
- * allers-retours mangent les gains. Le bot choisit donc bien, puis garde et protège.
+ * Comment décide le bot d'un compte créé avec le questionnaire : il TRADE, en suivant la tendance.
+ * Il ouvre une position quand le prix d'une valeur passe au-dessus de sa moyenne, la clôture quand la tendance se
+ * retourne, et vend tout si le compte descend sous la limite de perte. Nos tests honnêtes (page « Comprendre »)
+ * montrent que trader coûte des frais et rapporte moins que garder : la simulation avant le lancement le dit chiffres à l'appui.
  */
-const HOLD_AND_PROTECT =
-  "Le bot achète les placements choisis dès que leur bourse est ouverte, puis il les garde. Chaque jour, il vérifie ce que vaut votre placement : s'il descend sous votre limite de perte, il vend tout pour protéger le reste. Il n'achète et ne vend pas sans arrêt : nos tests sur 4 ans de vrais cours montrent que les allers-retours coûtent plus en frais qu'ils ne rapportent.";
+const ACTIVE_TRADING = `${trendExplanation(TREND_DAYS, TREND_BAND)} En plus, si le compte entier descend sous votre limite de perte, il vend tout et se met en pause.`;
 
 export const PROFILES: Record<RiskLevel, ProfileInfo> = {
   1: {
     level: 1,
     name: 'Très prudent',
     tagline: "Votre priorité : ne pas perdre d'argent.",
-    plan: "Le bot place votre argent dans des placements très calmes (des prêts à l'État ou à de grandes entreprises suisses, de l'or, des entreprises très stables) et garde 40 % de côté.",
+    plan: "Le bot trade des valeurs très calmes (obligations, or, grandes entreprises suisses très stables) avec des positions prudentes et garde 40 % de liquidités.",
     typicalYear: { worst: -3, best: 5 },
-    howItDecides: HOLD_AND_PROTECT,
-    strategy: 'buy_hold',
-    params: {},
+    howItDecides: ACTIVE_TRADING,
+    strategy: 'trend',
+    params: { period: TREND_DAYS, band: TREND_BAND },
     interval: '1d',
     maxInvestedPct: 60,
     stopLossPct: 0,
@@ -267,11 +269,11 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     level: 2,
     name: 'Prudent',
     tagline: "Faire un peu mieux qu'un compte épargne, sans stress.",
-    plan: 'Le bot mélange des placements très calmes et des actions de grandes entreprises stables, et garde 20 % de côté.',
+    plan: "Le bot trade un mélange de valeurs très calmes et d'actions de grandes entreprises stables, et garde 20 % de liquidités.",
     typicalYear: { worst: -8, best: 12 },
-    howItDecides: HOLD_AND_PROTECT,
-    strategy: 'buy_hold',
-    params: {},
+    howItDecides: ACTIVE_TRADING,
+    strategy: 'trend',
+    params: { period: TREND_DAYS, band: TREND_BAND },
     interval: '1d',
     maxInvestedPct: 80,
     stopLossPct: 0,
@@ -283,11 +285,11 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     level: 3,
     name: 'Équilibré',
     tagline: 'Faire grossir votre argent en acceptant quelques baisses.',
-    plan: 'Le bot investit surtout dans des actions de grandes entreprises, calmes et moyennes, et garde 10 % de côté.',
+    plan: 'Le bot trade surtout des actions de grandes entreprises, calmes et moyennes, et garde 10 % de liquidités.',
     typicalYear: { worst: -15, best: 25 },
-    howItDecides: HOLD_AND_PROTECT,
-    strategy: 'buy_hold',
-    params: {},
+    howItDecides: ACTIVE_TRADING,
+    strategy: 'trend',
+    params: { period: TREND_DAYS, band: TREND_BAND },
     interval: '1d',
     maxInvestedPct: 90,
     stopLossPct: 0,
@@ -299,11 +301,11 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     level: 4,
     name: 'Dynamique',
     tagline: 'Viser plus de gains, en acceptant des baisses importantes.',
-    plan: 'Le bot investit tout votre argent dans des actions plus agitées, qui peuvent monter plus vite… et baisser plus vite.',
+    plan: 'Le bot trade des actions plus agitées, qui peuvent monter plus vite… et baisser plus vite, avec tout votre capital disponible.',
     typicalYear: { worst: -25, best: 40 },
-    howItDecides: HOLD_AND_PROTECT,
-    strategy: 'buy_hold',
-    params: {},
+    howItDecides: ACTIVE_TRADING,
+    strategy: 'trend',
+    params: { period: TREND_DAYS, band: TREND_BAND },
     interval: '1d',
     maxInvestedPct: 100,
     stopLossPct: 0,
@@ -315,11 +317,11 @@ export const PROFILES: Record<RiskLevel, ProfileInfo> = {
     level: 5,
     name: 'Audacieux',
     tagline: 'Chercher le maximum de gains, en acceptant de grosses baisses.',
-    plan: "Le bot investit tout votre argent dans les actions les plus agitées (et un peu de cryptos si vous les acceptez). C'est le profil qui peut le plus gagner, et le plus perdre.",
+    plan: "Le bot trade les actions les plus agitées (et un peu de cryptos si vous les acceptez), avec tout votre capital disponible. C'est le profil qui peut le plus gagner, et le plus perdre.",
     typicalYear: { worst: -35, best: 60 },
-    howItDecides: HOLD_AND_PROTECT,
-    strategy: 'buy_hold',
-    params: {},
+    howItDecides: ACTIVE_TRADING,
+    strategy: 'trend',
+    params: { period: TREND_DAYS, band: TREND_BAND },
     interval: '1d',
     maxInvestedPct: 100,
     stopLossPct: 0,

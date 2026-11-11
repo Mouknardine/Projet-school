@@ -27,12 +27,12 @@ import { fmtMoney, fmtNum, fmtPct } from '../lib/format.ts';
 import { cx, Delta, Segmented } from './ui.tsx';
 
 export const COLORS = {
-  surface: '#141416',
-  line: '#26262a',
-  grid: '#1f1f23',
-  ink: '#f0efec',
-  ink2: '#c3c2b7',
-  ink3: '#898781',
+  surface: '#111317',
+  line: '#252932',
+  grid: '#1b1e25',
+  ink: '#f4f5f7',
+  ink2: '#cdd0d8',
+  ink3: '#9096a3',
   accent: '#3987e5',
   up: '#2ebd85',
   down: '#f6465d',
@@ -519,7 +519,8 @@ export function RiskTrack({ stop, target, entry, price, className = 'w-36' }: { 
 // Mini-courbe
 // ---------------------------------------------------------------------------
 
-export function Sparkline({ values, base, className, color }: { values: number[]; base?: number; className?: string; color?: string }) {
+export function Sparkline({ values, base, className, color, area = false }: { values: number[]; base?: number; className?: string; color?: string; area?: boolean }) {
+  const gid = useId();
   if (values.length < 2) return <div className={className} />;
   const w = 120;
   const h = 36;
@@ -533,7 +534,18 @@ export function Sparkline({ values, base, className, color }: { values: number[]
   const stroke = color ?? (values[values.length - 1] >= ref ? COLORS.up : COLORS.down);
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className={className} preserveAspectRatio="none" aria-hidden>
-      <line x1="0" x2={w} y1={y(ref)} y2={y(ref)} stroke={COLORS.line} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      {area && (
+        <>
+          <defs>
+            <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d={`${d} L${w},${h} L0,${h} Z`} fill={`url(#${gid})`} />
+        </>
+      )}
+      <line x1="0" x2={w} y1={y(ref)} y2={y(ref)} stroke={COLORS.line} strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
       <path d={d} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );

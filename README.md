@@ -6,9 +6,9 @@ argent réel n'est engagé.
 
 Projet réalisé dans le cadre du TIP « Le trading algorithmique et l'intelligence artificielle en bourse ».
 
-**La question du projet : peut-on investir avec un robot, sans prendre soi-même aucune décision ?** La personne, qui n'y connaît
-rien, répond seulement à un questionnaire. Le bot fait tout le reste : il choisit les actions, décide quand acheter et vendre, et
-protège l'argent selon le risque accepté.
+**La question du projet : peut-on faire trader un robot, sans prendre soi-même aucune décision ?** La personne, qui n'y connaît
+rien, répond seulement à un questionnaire. Le bot fait tout le reste : il choisit les valeurs, ouvre et ferme les positions (achats et
+ventes) en suivant la tendance, et protège le capital selon le risque accepté.
 
 ## Fonctionnalités
 
@@ -23,9 +23,12 @@ protège l'argent selon le risque accepté.
 - **Réglages automatiques** selon le profil : placements choisis, réserve de liquidités et **limite de perte globale** (si le
   placement baisse plus que la perte acceptée, le bot vend tout et se met en pause). Les profils prudents ne prennent que des
   placements dans la monnaie du compte (pas de risque ni de frais de change) ; pour tous, le risque est mesuré dans cette monnaie.
-  Le bot achète puis garde : nos tests honnêtes (choix en octobre 2022 avec les seuls cours d'avant, rejoué jusqu'en octobre 2026,
-  frais réels de Yuh) montrent qu'acheter et vendre souvent, par exemple en suivant la tendance, rapporte moins à tous les niveaux
-  de risque (profil dynamique : +39 % en gardant, +19 % en suivant la tendance). Résultats détaillés dans la page « Comprendre ».
+  Le bot **trade** : il suit la tendance (il ouvre une position quand le prix passe au-dessus de sa moyenne sur 100 jours de bourse,
+  la clôture quand il passe plus de 10 % en dessous). Nos tests honnêtes (choix en novembre 2022 avec les seuls cours d'avant, rejoué
+  jusqu'en novembre 2026, frais réels de Yuh, 10 000 CHF) montrent que trader rapporte **moins** que garder ses actions, à tous les
+  niveaux de risque (profil équilibré : +28 % en gardant, +17 % en suivant la tendance, frais 111 vs 565 CHF) ; une stratégie plus
+  nerveuse (score de plusieurs indicateurs, ~100 ordres en 4 ans) perd de l'argent. La simulation avant le lancement affiche cette
+  comparaison. Résultats détaillés dans la page « Comprendre ».
 - **Simulation honnête avant de lancer** : le bot se place il y a 2 ans, choisit ses placements avec les seuls cours connus à
   cette date, puis on rejoue ce qui s'est réellement passé ensuite, frais compris. Aucune information du futur n'est utilisée.
 - **Page d'un placement, pour débutants** : la valeur de l'argent (courbe avec la mise de départ, la limite de perte et chaque

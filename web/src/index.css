@@ -8,15 +8,15 @@
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
-  --color-page: #0b0b0c;
-  --color-surface: #141416;
-  --color-raised: #1c1c1f;
-  --color-line: #26262a;
-  --color-line-strong: #34343a;
+  --color-page: #090a0c;
+  --color-surface: #111317;
+  --color-raised: #1a1d23;
+  --color-line: #252932;
+  --color-line-strong: #363b46;
 
-  --color-ink: #f0efec;
-  --color-ink-2: #c3c2b7;
-  --color-ink-3: #898781;
+  --color-ink: #f4f5f7;
+  --color-ink-2: #cdd0d8;
+  --color-ink-3: #9096a3;
 
   --color-accent: #3987e5;
   --color-accent-text: #6aa8f0;
@@ -37,6 +37,7 @@
 
 html {
   color-scheme: dark;
+  font-size: 16px;
 }
 
 body {
@@ -46,6 +47,24 @@ body {
 /* Chiffres alignés dans les colonnes de tableaux uniquement. */
 .num {
   font-variant-numeric: tabular-nums;
+}
+
+/* Gros chiffre d'un compte (valeur, résultat) : serré, net, aligné. */
+.big-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  font-feature-settings: 'tnum' 1, 'cv11' 1;
+}
+
+/* Lueur douce derrière un compte : verte s'il gagne, rouge s'il perd. */
+.glow-up {
+  background-image: radial-gradient(90% 70% at 100% 0%, rgb(46 189 133 / 0.14), transparent 70%);
+}
+.glow-down {
+  background-image: radial-gradient(90% 70% at 100% 0%, rgb(246 70 93 / 0.14), transparent 70%);
+}
+.glow-flat {
+  background-image: radial-gradient(90% 70% at 100% 0%, rgb(144 150 163 / 0.1), transparent 70%);
 }
 
 ::selection {

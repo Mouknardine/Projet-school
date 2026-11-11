@@ -113,7 +113,7 @@ export function BotPage() {
       {/* En-tête */}
       <div>
         <Link to="/" className="inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2 [&_svg]:size-4">
-          <ArrowLeft aria-hidden /> Mes placements
+          <ArrowLeft aria-hidden /> Mes bots
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{bot.name}</h1>

@@ -1,4 +1,4 @@
-// Nouveau placement, pour quelqu'un qui n'y connaît rien : un questionnaire (une question par écran),
+// Nouveau bot, pour quelqu'un qui n'y connaît rien : un questionnaire (une question par écran),
 // puis le bot propose un profil, choisit lui-même ses actions et montre ce que ça aurait donné dans le passé.
 
 import { ArrowLeft, Check, Info, RotateCcw, Search, ShieldCheck, Sparkles, Star, TriangleAlert, X } from 'lucide-react';
@@ -106,10 +106,10 @@ function Intro({ onStart }: { onStart: () => void }) {
         <span className="flex size-11 items-center justify-center rounded-2xl bg-accent/15 text-accent-text [&_svg]:size-6">
           <Sparkles aria-hidden />
         </span>
-        <h1 className="mt-4 text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">Placer votre argent, sans rien y connaître</h1>
+        <h1 className="mt-4 text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">Lancez un bot de trading, sans rien y connaître</h1>
         <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
           Répondez à {QUESTIONS.length + 2} questions simples sur vous et sur ce que vous attendez. Le bot en déduit votre <b className="font-semibold text-ink">profil
-          d'investisseur</b>, choisit lui-même les actions qui vous correspondent, puis s'occupe de tout : les acheter, les surveiller et protéger votre argent.
+          de risque</b>, choisit lui-même les actions à trader, puis s'occupe de tout : il ouvre et ferme les positions et protège votre capital.
         </p>
         <ul className="mt-5 space-y-2.5 text-sm text-ink-2">
           {[
@@ -360,7 +360,7 @@ function MoneyStep({ draft, update, onBack, onNext }: { draft: Draft; update: (p
   return (
     <div className="mx-auto max-w-2xl animate-fade-up space-y-6">
       <div>
-        <Progress step={TOTAL_STEPS} section="Votre placement" onBack={onBack} />
+        <Progress step={TOTAL_STEPS} section="Votre bot de trading" onBack={onBack} />
         <h1 className="text-xl font-semibold leading-snug tracking-tight text-ink sm:text-2xl">Combien voulez-vous placer&nbsp;?</h1>
         <Why>C'est de l'argent fictif : choisissez un montant réaliste pour vous, pour que les frais et les résultats aient du sens.</Why>
         <div className="relative mt-4">
@@ -407,7 +407,7 @@ function MoneyStep({ draft, update, onBack, onNext }: { draft: Draft; update: (p
       </div>
 
       <div>
-        <h2 className="text-base font-semibold text-ink">Avec quelle banque ou appli investiriez-vous&nbsp;?</h2>
+        <h2 className="text-base font-semibold text-ink">Avec quelle banque ou appli tradez-vous (ou tradriez-vous)&nbsp;?</h2>
         <p className="mt-1 text-sm text-ink-3">Le bot paiera les vrais frais de cette banque à chaque achat et chaque vente.</p>
         <div className="mt-3 space-y-2">
           {BROKER_ANSWERS.map((b) => (
@@ -417,7 +417,7 @@ function MoneyStep({ draft, update, onBack, onNext }: { draft: Draft; update: (p
       </div>
 
       <Button variant="primary" className="h-12 w-full text-base" disabled={!valid} onClick={onNext}>
-        Voir mon profil et mon placement
+        Voir mon profil et mon bot
       </Button>
     </div>
   );
@@ -441,7 +441,7 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
   const [sim, setSim] = useState<ProfileSimulation | null>(null);
   const [simError, setSimError] = useState<string | null>(null);
   const [simLoading, setSimLoading] = useState(false);
-  const [name, setName] = useState(`Mon placement ${profile.name.toLowerCase()}`);
+  const [name, setName] = useState(`Mon bot ${profile.name.toLowerCase()}`);
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const crypto = draft.answers.crypto === 'yes';
@@ -522,7 +522,7 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
     setLaunching(true);
     setLaunchError(null);
     try {
-      const detail = await api.createBot({ ...botConfig, name: name.trim() || `Mon placement ${profile.name.toLowerCase()}` });
+      const detail = await api.createBot({ ...botConfig, name: name.trim() || `Mon bot ${profile.name.toLowerCase()}` });
       onDone();
       navigate(`/bots/${detail.bot.id}`);
     } catch (err) {
@@ -539,7 +539,7 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
     <div className="mx-auto max-w-3xl animate-fade-up space-y-5">
       {/* 1. Le profil */}
       <section className="rounded-3xl border border-line bg-surface p-5 sm:p-7">
-        <div className="text-xs font-semibold uppercase tracking-wider text-ink-3">Votre profil d'investisseur</div>
+        <div className="text-xs font-semibold uppercase tracking-wider text-ink-3">Votre profil de risque</div>
         <h1 className="mt-1.5 text-3xl font-semibold tracking-tight" style={{ color: LEVEL_COLORS[result.level] }}>
           {profile.name}
         </h1>
@@ -577,9 +577,9 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
           </Step>
           <Step n={3}>
             <b className="font-semibold text-ink">Sa protection : </b>
-            si votre placement descend sous <b className="font-semibold text-ink">{fmtMoney(floor, cur, 0)}</b> (−{result.maxLossPct}&nbsp;%, la baisse que vous avez dit
+            si votre compte descend sous <b className="font-semibold text-ink">{fmtMoney(floor, cur, 0)}</b> (−{result.maxLossPct}&nbsp;%, la baisse que vous avez dit
             pouvoir supporter), il vend tout pour protéger le reste et se met en pause.
-            {botConfig.stopLossPct > 0 && <> Il revend aussi une action qui baisse de {botConfig.stopLossPct}&nbsp;% après l'achat.</>}
+            {botConfig.stopLossPct > 0 && <> Chaque position a aussi un stop-loss à −{botConfig.stopLossPct}&nbsp;%{botConfig.takeProfitPct > 0 ? ` et un objectif de gain à +${botConfig.takeProfitPct} %` : ''}.</>}
           </Step>
           <Step n={4}>Il paie les vrais frais de {brokerName} (courtage, change, droit de timbre) à chaque achat et chaque vente.</Step>
         </ol>
@@ -587,7 +587,7 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
 
       {/* 3. Les placements choisis */}
       <Card
-        title="Les placements choisis par le bot"
+        title="Les valeurs que le bot va trader"
         subtitle={
           assets
             ? `Il a mesuré les variations de ${assets.analysed} placements sur l'année passée, en ${draft.currency}, et gardé ceux qui correspondent à votre profil.`
@@ -655,8 +655,8 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
         )}
         {assets && botConfig.symbols.length > 0 && (
           <p className="mt-3 text-xs leading-relaxed text-ink-3">
-            À chaque achat, le bot investit au plus {botConfig.positionSizePct}&nbsp;% de votre argent dans un même placement
-            {PROFILES[result.level].maxInvestedPct < 100 ? `, et garde au moins ${100 - PROFILES[result.level].maxInvestedPct} % de côté` : ''}.
+            À chaque ordre, le bot engage au plus {botConfig.positionSizePct}&nbsp;% de votre argent sur une même valeur
+            {PROFILES[result.level].maxInvestedPct < 100 ? `, et garde au moins ${100 - PROFILES[result.level].maxInvestedPct} % en liquidités` : ''}.
           </p>
         )}
       </Card>
@@ -678,14 +678,14 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
       {/* 5. Lancer */}
       <section className="rounded-3xl border border-accent/30 bg-accent/[0.07] p-5 sm:p-7">
         <div className="flex items-center gap-2 text-sm font-semibold text-ink [&_svg]:size-4">
-          <ShieldCheck className="text-accent-text" aria-hidden /> Prêt à lancer votre placement&nbsp;?
+          <ShieldCheck className="text-accent-text" aria-hidden /> Prêt à lancer votre bot de trading&nbsp;?
         </div>
         <p className="mt-1.5 text-sm leading-relaxed text-ink-2">
           Le bot démarre tout de suite avec {fmtMoney(draft.capital, cur, 0)} d'argent fictif, sur les vrais cours de la bourse. Vous n'aurez plus rien à décider : vous
           pourrez juste suivre ce qu'il fait, et pourquoi.
         </p>
         <label className="mt-4 block">
-          <span className="mb-1.5 block text-sm font-medium text-ink">Nom du placement</span>
+          <span className="mb-1.5 block text-sm font-medium text-ink">Nom du bot</span>
           <input className={inputClass} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
         </label>
         {launchError && (
@@ -694,7 +694,7 @@ function Result({ draft, onRestart, onDone }: { draft: Draft; onRestart: () => v
           </div>
         )}
         <Button variant="primary" className="mt-4 h-12 w-full text-base" disabled={launching || !assets || botConfig.symbols.length === 0} onClick={launch}>
-          {launching ? 'Lancement…' : 'Lancer mon placement'}
+          {launching ? 'Lancement…' : 'Lancer mon bot de trading'}
         </Button>
         <button type="button" onClick={onRestart} className="mx-auto mt-3 flex items-center gap-1.5 text-sm text-ink-3 hover:text-ink-2 [&_svg]:size-3.5">
           <RotateCcw aria-hidden /> Refaire le questionnaire
@@ -788,7 +788,7 @@ function Simulation({ sim, capital, currency, reservePct, loading }: {
           </li>
         )}
       </ul>
-      <PerformanceChart points={r.equity} initialCapital={capital} currency={currency} title="Valeur du placement simulé" ranges={[]} height={240} />
+      <PerformanceChart points={r.equity} initialCapital={capital} currency={currency} title="Valeur du compte simulé" ranges={[]} height={240} />
       <p className="text-xs leading-relaxed text-ink-3">
         Cette simulation n'utilise aucune information du futur : à chaque instant, le bot ne connaît que les cours passés, comme il le fera avec votre vrai
         placement. Elle montre ce qui se serait réellement passé, pas une promesse : les {years} à venir ne ressembleront pas forcément aux {years} passés.

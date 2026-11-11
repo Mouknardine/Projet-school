@@ -20,10 +20,10 @@ export function Card({ id, title, subtitle, actions, children, className, bodyCl
   return (
     <section id={id} className={cx('min-w-0 scroll-mt-20 rounded-2xl border border-line bg-surface', className)}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-4 pb-3">
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-5 pb-3">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-ink">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-xs text-ink-3">{subtitle}</p>}
+            <h2 className="text-base font-semibold tracking-tight text-ink">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{subtitle}</p>}
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
@@ -37,7 +37,7 @@ type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
 export function Button({ variant = 'secondary', className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   const styles: Record<Variant, string> = {
-    primary: 'bg-accent text-white hover:bg-[#4a94ea] font-semibold shadow-[0_1px_0_rgba(255,255,255,0.15)_inset]',
+    primary: 'bg-accent text-white hover:bg-[#4a94ea] font-semibold shadow-[0_1px_0_rgba(255,255,255,0.18)_inset]',
     secondary: 'bg-raised text-ink hover:bg-line border border-line',
     danger: 'text-down hover:bg-down/10 border border-line',
     ghost: 'text-ink-2 hover:bg-raised hover:text-ink',
@@ -147,13 +147,13 @@ export function StatTile({ label, icon, value, sub, valueClassName, help }: {
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="min-w-0 rounded-2xl border border-line bg-surface px-4 py-3.5">
+    <div className="min-w-0 rounded-2xl border border-line bg-surface px-4 py-4">
       <div className="flex items-center gap-1.5 text-xs font-medium text-ink-3 [&>svg]:size-3.5">
         {icon}
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {help && <HelpToggle label={label} open={open} onToggle={() => setOpen(!open)} />}
       </div>
-      <div className={cx('mt-1.5 truncate text-xl font-semibold tracking-tight text-ink', valueClassName)}>{value}</div>
+      <div className={cx('big-num mt-1.5 truncate text-2xl font-semibold text-ink', valueClassName)}>{value}</div>
       {sub && <div className="mt-1 line-clamp-2 text-xs leading-snug text-ink-3">{sub}</div>}
       {help && open && <p className="mt-2 rounded-lg bg-accent/10 px-2.5 py-2 text-xs leading-relaxed text-ink-2">{help}</p>}
     </div>
